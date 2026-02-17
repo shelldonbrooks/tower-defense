@@ -63,6 +63,8 @@ let screenFlash = 0; // white flash intensity (0-1)
 let damageBoostMult = 1.0;
 let damageBoostEnd  = 0; // timestamp when surge ends
 let prevBoostActive = false;
+let recentKillTimes = []; // timestamps of recent kills for combo tracking
+let comboActive = false;
 
 // ================================================================
 // AUDIO SYSTEM (Web Audio API — no external files)
@@ -938,6 +940,21 @@ function killEnemy(idx) {
     if (totalKills === 100) showBanner('🎖 100 Gegner besiegt!');
     else if (totalKills === 500) showBanner('🏅 500 Gegner besiegt!');
     else if (totalKills === 1000) showBanner('🏆 1000 Kills! Wahnsinn!');
+
+    // Combo tracking
+    const now3 = Date.now();
+    recentKillTimes.push(now3);
+    recentKillTimes = recentKillTimes.filter(t => now3 - t < 2000);
+    if (recentKillTimes.length >= 5 && !comboActive) {
+        comboActive = true;
+        const comboGold = 20;
+        gold += comboGold;
+        totalGoldEarned += comboGold;
+        const ex = e.x ?? (canvas.width / 2), ey = e.y ?? (canvas.height / 2);
+        spawnFloatText(ex, ey - 30, `🔥 COMBO! +${comboGold}💰`, '#FF6B6B');
+        sfxUpgrade();
+        setTimeout(() => { comboActive = false; }, 500);
+    }
 }
 
 // ================================================================
@@ -1180,10 +1197,24 @@ function spawnWave() {
     sfxWaveStart();
 
     // Wave milestones
-    if (wave % 5 === 0) {
+    if (wave === 25) {
+        setTimeout(() => {
+            showBanner('🎉 Welle 25 — Du bist ein Meister! +500💰');
+            gold += 500; totalGoldEarned += 500;
+            screenFlash = 0.4;
+            triggerShake(8);
+            // Confetti burst
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => spawnExplosion(
+                    50 + Math.random() * 700, 100 + Math.random() * 400,
+                    ['#FF6B6B','#FFD700','#4CAF50','#2196F3','#E040FB'][Math.floor(Math.random()*5)], 10
+                ), i * 80);
+            }
+        }, 800);
+    } else if (wave % 5 === 0) {
         setTimeout(() => showBanner(`💀 BOSS WELLE ${wave}! Vorbereiten!`), 500);
         triggerShake(5);
-    } else if (wave === 10 || wave === 20 || wave === 30) {
+    } else if (wave === 10 || wave === 20 || wave === 30 || wave === 40) {
         setTimeout(() => showBanner(`🔥 Welle ${wave} — Es wird ernst!`), 400);
     }
 
@@ -1506,7 +1537,8 @@ function resetGame() {
     waveInProgress = false; gamePaused = false;
     waveSpawnPending = 0; lastTimestamp = 0; hoverCell = null;
     gameSpeed = 1; autoWaveCountdown = 0; screenFlash = 0; shakeAmount = 0;
-    damageBoostMult = 1.0; damageBoostEnd = 0;
+    damageBoostMult = 1.0; damageBoostEnd = 0; prevBoostActive = false;
+    recentKillTimes = []; comboActive = false;
     clearTimeout(autoWaveTimer); autoWaveTimer = null;
     updateAutoWaveDisplay();
 

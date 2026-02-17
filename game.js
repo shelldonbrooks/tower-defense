@@ -1,6 +1,23 @@
 // ================================================================
-// 🐚 Shelldon's Tower Defense — Enhanced v2.0
+// 🐚 Shelldon's Tower Defense — v2.x
 // ================================================================
+
+// CanvasRenderingContext2D.roundRect polyfill (for Firefox <112, Safari <15.4)
+if (typeof CanvasRenderingContext2D !== 'undefined' &&
+    !CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+        const radius = typeof r === 'number' ? r : (Array.isArray(r) ? (r[0] || 0) : 0);
+        this.moveTo(x + radius, y);
+        this.lineTo(x + w - radius, y);
+        this.arcTo(x + w, y, x + w, y + radius, radius);
+        this.lineTo(x + w, y + h - radius);
+        this.arcTo(x + w, y + h, x + w - radius, y + h, radius);
+        this.lineTo(x + radius, y + h);
+        this.arcTo(x, y + h, x, y + h - radius, radius);
+        this.lineTo(x, y + radius);
+        this.arcTo(x, y, x + radius, y, radius);
+    };
+}
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -1051,6 +1068,21 @@ function drawHoverCell() {
 
     ctx.fillStyle = valid ? 'rgba(76,175,80,0.3)' : 'rgba(244,67,54,0.3)';
     ctx.fillRect(hoverCell.x * CELL_SIZE, hoverCell.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+
+    // Ghost tower icon in hover cell
+    const cx2 = hoverCell.x * CELL_SIZE + CELL_SIZE / 2;
+    const cy2 = hoverCell.y * CELL_SIZE + CELL_SIZE / 2;
+    const ghostCfg = TOWER_TYPES[selectedTowerType];
+    ctx.globalAlpha = valid ? 0.55 : 0.3;
+    ctx.fillStyle = ghostCfg.color + '99';
+    ctx.beginPath();
+    ctx.roundRect(cx2 - 14, cy2 - 14, 28, 28, 4);
+    ctx.fill();
+    ctx.font = '17px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(ghostCfg.icon, cx2, cy2);
+    ctx.globalAlpha = 1;
 
     if (valid && selectedTowerType) {
         const cfg = TOWER_TYPES[selectedTowerType];

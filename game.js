@@ -41,6 +41,8 @@ let totalGoldEarned = 0;
 let totalDamageDealt = 0;
 let gameStartTime = Date.now();
 let sessionWaveHighest = parseInt(localStorage.getItem('tdWaveHigh') || '0');
+let livesAtWaveStart = 20; // track for no-leak bonus
+let screenFlash = 0; // white flash intensity (0-1)
 
 // ================================================================
 // AUDIO SYSTEM (Web Audio API — no external files)
@@ -407,6 +409,31 @@ class Enemy {
     }
 
     draw() {
+        // Fast enemy speed lines
+        if (this.isFast && this.pathIndex < PATH_WAYPOINTS.length - 1) {
+            const cur  = PATH_WAYPOINTS[this.pathIndex];
+            const next = PATH_WAYPOINTS[this.pathIndex + 1];
+            const dx = (next.x - cur.x) * CELL_SIZE;
+            const dy = (next.y - cur.y) * CELL_SIZE;
+            const len = Math.sqrt(dx * dx + dy * dy);
+            if (len > 0) {
+                const nx = -dx / len, ny = -dy / len; // opposite direction
+                ctx.strokeStyle = 'rgba(255, 100, 30, 0.5)';
+                ctx.lineWidth = 1.5;
+                for (let i = 1; i <= 3; i++) {
+                    const lineLen = 4 + i * 3;
+                    ctx.beginPath();
+                    ctx.moveTo(this.x + nx * (this.radius + i * 3),
+                               this.y + ny * (this.radius + i * 3));
+                    ctx.lineTo(this.x + nx * (this.radius + i * 3 + lineLen),
+                               this.y + ny * (this.radius + i * 3 + lineLen));
+                    ctx.globalAlpha = 0.5 - i * 0.12;
+                    ctx.stroke();
+                }
+                ctx.globalAlpha = 1;
+            }
+        }
+
         // Cryo glow
         if (this.slowedUntil > Date.now()) {
             ctx.strokeStyle = 'rgba(0, 188, 212, 0.8)';
@@ -576,6 +603,22 @@ class Tower {
     draw() {
         const stats = this.getStats();
 
+        // Sniper laser sight
+        if (this.type === 'sniper' && this.target && this.target.health > 0) {
+            const stats = this.getStats();
+            const now2 = Date.now();
+            const coolFrac = Math.max(0, Math.min(1, (now2 - this.lastFired) / (stats.fireRate / gameSpeed)));
+            const alpha = Math.floor(coolFrac * 200);
+            ctx.strokeStyle = this.config.color + alpha.toString(16).padStart(2, '0');
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 8]);
+            ctx.beginPath();
+            ctx.moveTo(this.x, this.y);
+            ctx.lineTo(this.target.x, this.target.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
         // Range ring when selected
         if (selectedTower === this) {
             ctx.strokeStyle = this.config.color + '55';
@@ -744,7 +787,7 @@ function killEnemy(idx) {
     spawnExplosion(e.x, e.y, e.color, isBoss ? 24 : 12);
     spawnFloatText(e.x, e.y - 15, `+${e.reward}💰`);
     sfxKill(isBoss);
-    if (isBoss) triggerShake(14);
+    if (isBoss) { triggerShake(14); screenFlash = 0.7; }
     enemies.splice(idx, 1);
     if (score > highScore) {
         highScore = score;
@@ -975,6 +1018,7 @@ function spawnWave() {
     wave++;
     waveInProgress = true;
     waveSpawnPending = 0;
+    livesAtWaveStart = lives;
     sfxWaveStart();
 
     // Wave milestones
@@ -1016,7 +1060,25 @@ function checkWaveComplete() {
 
     waveInProgress = false;
     const bonus = 30 + wave * 12;
-    gold  += bonus;
+    let totalBonus = bonus;
+    const bonusParts = [`+${bonus}💰 Wellenbonus`];
+
+    // No-leak bonus: +25 gold if no lives lost this wave
+    if (lives >= livesAtWaveStart) {
+        const noLeakBonus = 25;
+        totalBonus += noLeakBonus;
+        bonusParts.push(`+${noLeakBonus}💰 Kein Schaden!`);
+    }
+
+    // Interest: 5% of current gold (capped at 80)
+    const interest = Math.min(80, Math.floor(gold * 0.05));
+    if (interest > 0) {
+        totalBonus += interest;
+        bonusParts.push(`+${interest}💰 Zinsen (5%)`);
+    }
+
+    gold  += totalBonus;
+    totalGoldEarned += totalBonus;
     score += wave * 10;
 
     if (score > highScore) {
@@ -1025,7 +1087,8 @@ function checkWaveComplete() {
     }
 
     sfxWaveComplete();
-    showBanner(`🌊 Welle ${wave} geschafft! +${bonus}💰`);
+    const shortParts = bonusParts.slice(0, 2).join(' · ');
+    showBanner(`🌊 Welle ${wave}! ${shortParts}`);
     updateUI();
 
     // Auto-wave countdown
@@ -1221,7 +1284,7 @@ function resetGame() {
     selectedTower = null; selectedTowerType = null;
     waveInProgress = false; gamePaused = false;
     waveSpawnPending = 0; lastTimestamp = 0; hoverCell = null;
-    gameSpeed = 1; autoWaveCountdown = 0;
+    gameSpeed = 1; autoWaveCountdown = 0; screenFlash = 0; shakeAmount = 0;
     clearTimeout(autoWaveTimer); autoWaveTimer = null;
     updateAutoWaveDisplay();
 
@@ -1285,6 +1348,16 @@ function gameLoop(timestamp) {
 
         updateTextParticles();
         ctx.restore(); // end shake transform
+
+        // Screen flash (boss kill / special events)
+        if (screenFlash > 0.01) {
+            ctx.fillStyle = `rgba(255,255,255,${screenFlash.toFixed(3)})`;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            screenFlash *= 0.75;
+        } else {
+            screenFlash = 0;
+        }
+
         checkWaveComplete();
         updateUI();
     }

@@ -699,11 +699,24 @@ class Tower {
         this.targetMode = 'first'; // 'first' | 'last' | 'strong' | 'weak'
     }
 
+    getSynergyBonus() {
+        // +10% dmg per adjacent same-type tower (max 30%)
+        let adj = 0;
+        for (const t of towers) {
+            if (t === this || t.type !== this.type) continue;
+            const dx = Math.abs(t.gridX - this.gridX);
+            const dy = Math.abs(t.gridY - this.gridY);
+            if (dx <= 1 && dy <= 1) adj++;
+        }
+        return Math.min(adj * 0.10, 0.30);
+    }
+
     getStats() {
         const u    = UPGRADES[this.level - 1];
         const dmgBoost = (Date.now() < damageBoostEnd) ? damageBoostMult : 1.0;
+        const synergy  = 1.0 + this.getSynergyBonus();
         return {
-            damage:   this.config.damage   * u.dmgMult * dmgBoost,
+            damage:   this.config.damage   * u.dmgMult * dmgBoost * synergy,
             range:    this.config.range    * u.rangeMult,
             fireRate: this.config.fireRate * u.rateMult
         };
@@ -1217,6 +1230,35 @@ function drawPath() {
     }
 }
 
+function drawSynergyLines() {
+    const drawn = new Set();
+    const pulse = 0.4 + Math.abs(Math.sin(Date.now() / 600)) * 0.35;
+    for (let i = 0; i < towers.length; i++) {
+        const ta = towers[i];
+        for (let j = i + 1; j < towers.length; j++) {
+            const tb = towers[j];
+            if (ta.type !== tb.type) continue;
+            const dx = Math.abs(ta.gridX - tb.gridX);
+            const dy = Math.abs(ta.gridY - tb.gridY);
+            if (dx > 1 || dy > 1) continue;
+            const key = `${i}-${j}`;
+            if (drawn.has(key)) continue;
+            drawn.add(key);
+            ctx.save();
+            ctx.strokeStyle = ta.config.color;
+            ctx.globalAlpha = pulse * 0.7;
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([3, 4]);
+            ctx.beginPath();
+            ctx.moveTo(ta.x, ta.y);
+            ctx.lineTo(tb.x, tb.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.restore();
+        }
+    }
+}
+
 function drawHoverCell() {
     if (!hoverCell || !selectedTowerType) return;
     const key = `${hoverCell.x},${hoverCell.y}`;
@@ -1634,12 +1676,17 @@ function updateTowerPanel() {
     const poisonNote = t.config.poisonDPS
         ? `<span>🧪 ${t.config.poisonDPS}/s DoT</span>`
         : '';
+    const synergyBonus = t.getSynergyBonus();
+    const synergyNote = synergyBonus > 0
+        ? `<span title="Synergy: +${Math.round(synergyBonus*100)}% dmg">🔗 +${Math.round(synergyBonus*100)}% Syn</span>`
+        : '';
     document.getElementById('towerInfoStats').innerHTML =
         `<span>💥 ${Math.round(s.damage)}${chainNote}</span>` +
         `<span>📏 ${Math.round(s.range)}</span>` +
         `<span>🔥 ${(1000 / s.fireRate).toFixed(1)}/s</span>` +
         `<span>📊 ${dps} DPS</span>` +
         poisonNote +
+        synergyNote +
         `<span>🎯 ${t.kills} kills</span>` +
         `<span>💢 ${Math.floor(t.totalDmg).toLocaleString()}</span>`;
 
@@ -1755,6 +1802,7 @@ function gameLoop(timestamp) {
         drawHoverCell();
 
         towers.forEach(t => { t.update(now); t.draw(); });
+        drawSynergyLines();
 
         for (let i = enemies.length - 1; i >= 0; i--) {
             const e = enemies[i];

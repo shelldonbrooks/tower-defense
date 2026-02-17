@@ -1087,3 +1087,9 @@ body {
     color: #78909C;
     font-weight: 600;
 }
+
+.wp-ghost {
+    color: #CE93D8;
+    font-weight: 600;
+    font-style: italic;
+}

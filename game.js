@@ -499,6 +499,7 @@ class Enemy {
         this.isFast       = cfg.isFast       || false;
         this.isSlowImmune = cfg.isSlowImmune || false;
         this.armorReduce  = cfg.armorReduce  || 0;  // 0-1: fraction of damage blocked
+        this.isStealthy   = cfg.isStealthy   || false; // can only be targeted by sniper/L3 towers
 
         this.pathIndex = 0;
         this.progress  = 0;
@@ -671,6 +672,12 @@ class Enemy {
             ctx.stroke();
         }
 
+        // Stealth ghost: semi-transparent with shimmer
+        if (this.isStealthy) {
+            const shimmer = 0.35 + Math.abs(Math.sin(Date.now() / 300)) * 0.25;
+            ctx.globalAlpha = shimmer;
+        }
+
         // Shadow
         ctx.fillStyle = 'rgba(0,0,0,0.25)';
         ctx.beginPath();
@@ -693,6 +700,9 @@ class Enemy {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(this.icon, this.x, this.y);
+
+        // Reset stealth alpha before health bar
+        ctx.globalAlpha = 1;
 
         // Health bar
         const bw = this.radius * 2.2;
@@ -814,6 +824,7 @@ class Tower {
             const e = enemies[i];
             const dx = e.x - this.x, dy = e.y - this.y;
             if (Math.sqrt(dx * dx + dy * dy) > stats.range) continue;
+            if (e.isStealthy && !this.canTargetStealthy()) continue;
             spawnHitFlash(e.x, e.y, this.config.color);
             this.totalDmg += stats.damage;
             totalDamageDealt += stats.damage;
@@ -830,6 +841,10 @@ class Tower {
         return hitCount;
     }
 
+    canTargetStealthy() {
+        return this.type === 'sniper' || this.level >= 3;
+    }
+
     findTarget(range) {
         let best = null;
         let bestVal = this.targetMode === 'last' ? Infinity
@@ -839,6 +854,8 @@ class Tower {
         for (const e of enemies) {
             const dx = e.x - this.x, dy = e.y - this.y;
             if (Math.sqrt(dx * dx + dy * dy) > range) continue;
+            // Stealthy enemies can only be targeted by snipers or L3 towers
+            if (e.isStealthy && !this.canTargetStealthy()) continue;
 
             let val;
             switch (this.targetMode) {
@@ -1562,6 +1579,22 @@ function buildWaveRoster(waveNum) {
         }
     }
 
+    if (waveNum >= 18) {
+        const ghostCount = Math.min(1 + Math.floor((waveNum - 18) / 5), 3);
+        for (let i = 0; i < ghostCount; i++) {
+            configs.push({
+                health: Math.floor(baseHp * 1.5),
+                speed:  baseSpeed * 1.4,
+                reward: Math.floor(baseReward * 3.0),
+                scoreVal: baseReward * 6,
+                icon: '👻', color: '#E1BEE7', radius: 13,
+                isTank: false, isSlowImmune: false,
+                isStealthy: true,
+                delay: basicCount * 1000 + i * 1800 + 1200
+            });
+        }
+    }
+
     if (waveNum >= 12) {
         const mechCount = Math.min(1 + Math.floor((waveNum - 12) / 4), 3);
         const tankCountPrev = Math.min(1 + Math.floor((waveNum - 5) / 2), 4);
@@ -1879,11 +1912,12 @@ function updateWavePreview() {
 
     const nextWave = wave + 1;
     const roster = buildWaveRoster(nextWave);
-    const counts = { normal: 0, fast: 0, tank: 0, mutant: 0, mech: 0, boss: 0 };
+    const counts = { normal: 0, fast: 0, tank: 0, mutant: 0, mech: 0, ghost: 0, boss: 0 };
     for (const c of roster) {
         if (c.icon === '💀')      counts.boss++;
         else if (c.icon === '🧬') counts.mutant++;
         else if (c.icon === '🔩') counts.mech++;
+        else if (c.icon === '👻') counts.ghost++;
         else if (c.isTank)        counts.tank++;
         else if (c.isFast)        counts.fast++;
         else                      counts.normal++;
@@ -1895,6 +1929,7 @@ function updateWavePreview() {
     if (counts.tank)   parts.push(`<span>🛡️×${counts.tank}</span>`);
     if (counts.mutant) parts.push(`<span class="wp-mutant">🧬×${counts.mutant}</span>`);
     if (counts.mech)   parts.push(`<span class="wp-mech">🔩×${counts.mech}</span>`);
+    if (counts.ghost)  parts.push(`<span class="wp-ghost">👻×${counts.ghost}</span>`);
     if (counts.boss)   parts.push(`<span class="wp-boss">💀 BOSS!</span>`);
 
     el.innerHTML = `<strong>Welle ${nextWave}:</strong> ${parts.join(' ')}`;
@@ -2542,7 +2577,13 @@ function getLeaderboard() {
 
 function addToLeaderboard(scr, wv) {
     const lb = getLeaderboard();
-    lb.push({ score: scr, wave: wv, date: new Date().toLocaleDateString('de-DE') });
+    const mapIcon = ['🐍','⚡','🌀'][selectedMapIndex] || '🐍';
+    const diffIcon = { easy: '🌱', normal: '⚔️', hard: '💀' }[selectedDifficulty] || '⚔️';
+    lb.push({
+        score: scr, wave: wv,
+        date: new Date().toLocaleDateString('de-DE'),
+        mapIcon, diffIcon
+    });
     lb.sort((a, b) => b.score - a.score);
     lb.splice(5);
     localStorage.setItem(LB_KEY, JSON.stringify(lb));
@@ -2555,7 +2596,9 @@ function renderLeaderboard() {
     const rows = lb.map((e, i) =>
         `<tr><td>${['🥇','🥈','🥉','4.','5.'][i]}</td>` +
         `<td><strong>${e.score.toLocaleString()}</strong></td>` +
-        `<td>W${e.wave}</td><td>${e.date}</td></tr>`
+        `<td>W${e.wave}</td>` +
+        `<td>${e.mapIcon || ''}${e.diffIcon || ''}</td>` +
+        `<td>${e.date}</td></tr>`
     ).join('');
     return `<div class="go-tower-stats"><strong>🏆 Bestenliste:</strong>` +
            `<table class="lb-table">${rows}</table></div>`;

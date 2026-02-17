@@ -43,6 +43,8 @@ let gameStartTime = Date.now();
 let sessionWaveHighest = parseInt(localStorage.getItem('tdWaveHigh') || '0');
 let livesAtWaveStart = 20; // track for no-leak bonus
 let screenFlash = 0; // white flash intensity (0-1)
+let damageBoostMult = 1.0;
+let damageBoostEnd  = 0; // timestamp when surge ends
 
 // ================================================================
 // AUDIO SYSTEM (Web Audio API — no external files)
@@ -550,9 +552,10 @@ class Tower {
     }
 
     getStats() {
-        const u = UPGRADES[this.level - 1];
+        const u    = UPGRADES[this.level - 1];
+        const dmgBoost = (Date.now() < damageBoostEnd) ? damageBoostMult : 1.0;
         return {
-            damage:   this.config.damage   * u.dmgMult,
+            damage:   this.config.damage   * u.dmgMult * dmgBoost,
             range:    this.config.range    * u.rangeMult,
             fireRate: this.config.fireRate * u.rateMult
         };
@@ -646,6 +649,16 @@ class Tower {
 
     draw() {
         const stats = this.getStats();
+
+        // Damage boost surge glow
+        if (Date.now() < damageBoostEnd) {
+            const remain = (damageBoostEnd - Date.now()) / 30000; // fraction remaining
+            ctx.strokeStyle = `rgba(255,215,0,${0.3 + remain * 0.5})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, 20 + Math.sin(Date.now() / 150) * 3, 0, Math.PI * 2);
+            ctx.stroke();
+        }
 
         // Sniper laser sight
         if (this.type === 'sniper' && this.target && this.target.health > 0) {
@@ -857,6 +870,30 @@ class Projectile {
 // ================================================================
 // KILL ENEMY
 // ================================================================
+function triggerBossDrop() {
+    const roll = Math.random();
+    if (roll < 0.12) {
+        // Damage surge: +75% for 30s
+        damageBoostMult = 1.75;
+        damageBoostEnd  = Date.now() + 30000;
+        sfxUpgrade();
+        showBanner('⚡ POWER SURGE! +75% Schaden für 30s!');
+    } else if (roll < 0.35) {
+        // Extra life
+        lives = Math.min(lives + 1, 25);
+        showBanner(`💝 Bonus Leben! ${lives}❤️`);
+        _tone({ freq: 880, type: 'sine', dur: 0.2, vol: 0.4, decay: 0.2, sweep: 1100 });
+    } else {
+        // Gold drop (always happens)
+        const goldDrop = 80 + Math.floor(wave * 8);
+        gold += goldDrop;
+        totalGoldEarned += goldDrop;
+        spawnFloatText(canvas.width / 2, canvas.height / 2, `💰 Boss Drop: +${goldDrop}!`, '#FFD700');
+        showBanner(`💰 Boss Drop: +${goldDrop}💰`);
+    }
+    updateUI();
+}
+
 function killEnemy(idx) {
     const e = enemies[idx];
     if (!e) return;
@@ -868,7 +905,12 @@ function killEnemy(idx) {
     spawnExplosion(e.x, e.y, e.color, isBoss ? 24 : 12);
     spawnFloatText(e.x, e.y - 15, `+${e.reward}💰`);
     sfxKill(isBoss);
-    if (isBoss) { triggerShake(14); screenFlash = 0.7; }
+    if (isBoss) {
+        triggerShake(14);
+        screenFlash = 0.7;
+        // Boss power-up drop
+        setTimeout(() => triggerBossDrop(), 400);
+    }
     enemies.splice(idx, 1);
     if (score > highScore) {
         highScore = score;
@@ -1174,6 +1216,19 @@ function checkWaveComplete() {
     showBanner(`🌊 Welle ${wave}! ${shortParts}`);
     updateUI();
 
+    // Auto-save between waves (silent)
+    try {
+        const autoData = {
+            gold, lives, wave, score, highScore,
+            towers: towers.map(t => ({
+                gx: t.gridX, gy: t.gridY, type: t.type,
+                level: t.level, kills: t.kills, totalDmg: t.totalDmg,
+                targetMode: t.targetMode
+            }))
+        };
+        localStorage.setItem(SAVE_KEY, JSON.stringify(autoData));
+    } catch(e) { /* storage full, ignore */ }
+
     // Auto-wave countdown
     if (autoWave) {
         startAutoWaveCountdown();
@@ -1418,6 +1473,7 @@ function resetGame() {
     waveInProgress = false; gamePaused = false;
     waveSpawnPending = 0; lastTimestamp = 0; hoverCell = null;
     gameSpeed = 1; autoWaveCountdown = 0; screenFlash = 0; shakeAmount = 0;
+    damageBoostMult = 1.0; damageBoostEnd = 0;
     clearTimeout(autoWaveTimer); autoWaveTimer = null;
     updateAutoWaveDisplay();
 
@@ -1550,6 +1606,20 @@ canvas.addEventListener('mousemove', e => {
 });
 
 canvas.addEventListener('mouseleave', () => { hoverCell = null; });
+
+// Right-click to sell selected tower
+canvas.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    if (selectedTower) {
+        const refund = selectedTower.getSellValue();
+        gold += refund;
+        sfxSell();
+        spawnFloatText(selectedTower.x, selectedTower.y - 20, `+${refund}💰`, '#FFD700');
+        towers.splice(towers.indexOf(selectedTower), 1);
+        selectedTower = null;
+        updateUI();
+    }
+});
 
 canvas.addEventListener('click', e => {
     const r  = canvas.getBoundingClientRect();

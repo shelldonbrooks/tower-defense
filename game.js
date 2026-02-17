@@ -1717,8 +1717,19 @@ function checkWaveComplete() {
 
     sfxWaveComplete();
     const shortParts = bonusParts.slice(0, 2).join(' · ');
-    showBanner(`🌊 Welle ${wave}! ${shortParts}`);
+    showBanner(`🌊 Welle ${wave} abgeschlossen! ${shortParts}`);
     checkAchievements();
+
+    // Show wave MVP tower (highest kills this wave, reset after)
+    const mvp = [...towers].sort((a, b) => b.kills - a.kills)[0];
+    if (mvp && mvp.kills > 0) {
+        setTimeout(() => spawnFloatText(
+            mvp.x, mvp.y - 28,
+            `⭐ MVP: ${mvp.config.icon} ${mvp.kills}kills`,
+            '#FFD700'
+        ), 500);
+    }
+
     updateUI();
 
     // Auto-save between waves (silent)

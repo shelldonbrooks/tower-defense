@@ -7,60 +7,150 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="game-container">
-        <div class="header">
-            <h1>🐚 Shelldon's Tower Defense</h1>
-            <div class="stats">
-                <div class="stat">
-                    <span class="label">💰 Gold:</span>
-                    <span id="gold">200</span>
-                </div>
-                <div class="stat">
-                    <span class="label">❤️ Leben:</span>
-                    <span id="lives">20</span>
-                </div>
-                <div class="stat">
-                    <span class="label">🌊 Welle:</span>
-                    <span id="wave">1</span>
-                </div>
-            </div>
-        </div>
 
-        <div class="game-area">
-            <canvas id="gameCanvas" width="800" height="600"></canvas>
-            
-            <div class="tower-shop">
-                <h3>🗼 Türme</h3>
-                <div class="tower-buttons">
-                    <button class="tower-btn" data-type="basic" data-cost="50">
-                        <div class="tower-icon">🎯</div>
-                        <div class="tower-name">Basic</div>
-                        <div class="tower-cost">50💰</div>
-                    </button>
-                    <button class="tower-btn" data-type="heavy" data-cost="100">
-                        <div class="tower-icon">💣</div>
-                        <div class="tower-name">Heavy</div>
-                        <div class="tower-cost">100💰</div>
-                    </button>
-                    <button class="tower-btn" data-type="fast" data-cost="80">
-                        <div class="tower-icon">⚡</div>
-                        <div class="tower-name">Fast</div>
-                        <div class="tower-cost">80💰</div>
-                    </button>
-                </div>
-                <div class="controls">
-                    <button id="startWave" class="btn-primary">▶️ Welle starten</button>
-                    <button id="sellTower" class="btn-secondary">💸 Turm verkaufen (50%)</button>
-                </div>
-            </div>
-        </div>
+<!-- Wave Complete Banner -->
+<div id="waveBanner" class="wave-banner"></div>
 
-        <div class="info">
-            <p>Platziere Türme auf dem Spielfeld, um Gegner aufzuhalten!</p>
-            <p><strong>Steuerung:</strong> Klicke auf einen Turm und dann auf das Feld</p>
+<!-- Game Over Overlay -->
+<div id="gameOverlay" class="overlay" style="display:none;">
+    <div class="overlay-box">
+        <div id="overlayTitle" class="overlay-title">💀 Game Over!</div>
+        <div id="overlayMessage" class="overlay-message"></div>
+        <button id="overlayBtn" class="btn-primary overlay-btn">🔄 Neu starten</button>
+    </div>
+</div>
+
+<div class="game-container">
+
+    <!-- Header -->
+    <div class="header">
+        <h1>🐚 Shelldon's Tower Defense</h1>
+        <div class="stats-bar">
+            <div class="stat gold">
+                <span class="stat-icon">💰</span>
+                <span id="gold">200</span>
+            </div>
+            <div class="stat lives">
+                <span class="stat-icon">❤️</span>
+                <span id="lives">20</span>
+            </div>
+            <div class="stat wave">
+                <span class="stat-icon">🌊</span>
+                <span id="wave">0</span>
+            </div>
+            <div class="stat score">
+                <span class="stat-icon">⭐</span>
+                <span id="score">0</span>
+            </div>
+            <div class="stat highscore">
+                <span class="stat-icon">🏆</span>
+                <span id="highscore">0</span>
+            </div>
         </div>
     </div>
 
-    <script src="game.js"></script>
+    <!-- Main Game Area -->
+    <div class="game-area">
+
+        <!-- Canvas -->
+        <div class="canvas-wrapper">
+            <canvas id="gameCanvas" width="800" height="600"></canvas>
+        </div>
+
+        <!-- Side Panel -->
+        <div class="side-panel">
+
+            <!-- Tower Shop -->
+            <div class="panel-section">
+                <h3 class="panel-title">🗼 Türme kaufen</h3>
+                <p class="hint">Shift+Klick = mehrere platzieren</p>
+                <div class="tower-grid">
+                    <button class="tower-btn" data-type="basic" data-cost="50">
+                        <span class="tb-icon">🎯</span>
+                        <span class="tb-name">Basic</span>
+                        <span class="tb-cost">50💰</span>
+                        <span class="tb-desc">Allrounder</span>
+                    </button>
+                    <button class="tower-btn" data-type="heavy" data-cost="100">
+                        <span class="tb-icon">💣</span>
+                        <span class="tb-name">Heavy</span>
+                        <span class="tb-cost">100💰</span>
+                        <span class="tb-desc">Viel Dmg</span>
+                    </button>
+                    <button class="tower-btn" data-type="fast" data-cost="80">
+                        <span class="tb-icon">⚡</span>
+                        <span class="tb-name">Fast</span>
+                        <span class="tb-cost">80💰</span>
+                        <span class="tb-desc">Rapid fire</span>
+                    </button>
+                    <button class="tower-btn" data-type="slow" data-cost="75">
+                        <span class="tb-icon">🧊</span>
+                        <span class="tb-name">Cryo</span>
+                        <span class="tb-cost">75💰</span>
+                        <span class="tb-desc">Slow 60%</span>
+                    </button>
+                    <button class="tower-btn" data-type="sniper" data-cost="150">
+                        <span class="tb-icon">🔭</span>
+                        <span class="tb-name">Sniper</span>
+                        <span class="tb-cost">150💰</span>
+                        <span class="tb-desc">Long range</span>
+                    </button>
+                    <button class="tower-btn" data-type="area" data-cost="120">
+                        <span class="tb-icon">💥</span>
+                        <span class="tb-name">Bomber</span>
+                        <span class="tb-cost">120💰</span>
+                        <span class="tb-desc">Splash dmg</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Selected Tower Info -->
+            <div id="towerInfo" class="panel-section tower-info-panel" style="display:none;">
+                <h3 class="panel-title">🔍 Ausgewählt</h3>
+                <div id="towerInfoName" class="tower-info-name"></div>
+                <div id="towerInfoStats" class="tower-info-stats"></div>
+                <div class="tower-info-actions">
+                    <button id="upgradeTower" class="btn-upgrade">⬆ Upgrade</button>
+                    <button id="sellTower" class="btn-sell">💸 Sell</button>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="panel-section">
+                <h3 class="panel-title">🎮 Steuerung</h3>
+                <div class="control-buttons">
+                    <button id="startWave" class="btn-primary btn-full">▶️ Welle starten</button>
+                    <div class="btn-row">
+                        <button id="pauseBtn" class="btn-secondary">⏸ Pause</button>
+                        <button id="speedBtn" class="btn-secondary">1x ⏩</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Enemy Legend -->
+            <div class="panel-section">
+                <h3 class="panel-title">👾 Gegnertypen</h3>
+                <div class="enemy-legend">
+                    <div class="el-row"><span>👾</span> <span>Normal (ab W1)</span></div>
+                    <div class="el-row"><span>🏃</span> <span>Fast 2,5× (ab W3)</span></div>
+                    <div class="el-row"><span>🛡️</span> <span>Tank 3× HP (ab W5)</span></div>
+                    <div class="el-row"><span>💀</span> <span>Boss (W5,10,15…)</span></div>
+                </div>
+            </div>
+
+            <!-- Keyboard Shortcuts -->
+            <div class="panel-section hint-box">
+                <strong>⌨️ Shortcuts</strong><br>
+                <span>Space/P</span> Pause<br>
+                <span>Enter</span> Nächste Welle<br>
+                <span>Esc</span> Auswahl aufheben
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+<script src="game.js"></script>
 </body>
 </html>

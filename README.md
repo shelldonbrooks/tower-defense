@@ -1,78 +1,87 @@
 # 🐚 Shelldon's Tower Defense
 
-Ein kleines Tower Defense Spiel, gebaut für shelldon.monoroc.de
+A browser-based tower defense game built with vanilla HTML5 Canvas, CSS, and JavaScript.
 
-## 🎮 Spielanleitung
+## 🎮 How to Play
 
-### Ziel
-Verhindere, dass Gegner das Ende des Pfades erreichen. Jeder Gegner, der durchkommt, kostet dich 1 Leben. Bei 0 Leben ist das Spiel vorbei.
+1. Open `index.html` in your browser (or visit the hosted version)
+2. Buy towers from the shop panel on the right
+3. Click a tower to select it, then click the grid to place it
+4. Press **▶️ Welle starten** to send the next wave of enemies
+5. Defend your base — don't let enemies reach the exit!
 
-### Steuerung
-1. **Turm auswählen**: Klicke auf einen Turm-Button in der Seitenleiste
-2. **Turm platzieren**: Klicke auf ein freies Feld (nicht auf dem Pfad!)
-3. **Welle starten**: Klicke auf "▶️ Welle starten"
-4. **Turm verkaufen**: Wähle einen platzierten Turm aus (Klick drauf), dann "💸 Turm verkaufen"
+## 🗼 Tower Types
 
-### 🗼 Türme
+| Icon | Name   | Cost  | Special |
+|------|--------|-------|---------|
+| 🎯   | Basic  | 50💰  | Balanced all-rounder |
+| 💣   | Heavy  | 100💰 | High damage, slow fire |
+| ⚡   | Fast   | 80💰  | Rapid fire, low damage |
+| 🧊   | Cryo   | 75💰  | Slows enemies 60% for 2.5s |
+| 🔭   | Sniper | 150💰 | Extreme range, 1-shot power |
+| 💥   | Bomber | 120💰 | Area splash damage |
 
-| Typ | Kosten | Schaden | Reichweite | Feuerrate | Taktik |
-|-----|--------|---------|------------|-----------|---------|
-| 🎯 **Basic** | 50💰 | 10 | Mittel | Mittel | Allrounder, gut für den Start |
-| 💣 **Heavy** | 100💰 | 30 | Kurz | Langsam | Hoher Schaden, platziere nah am Pfad |
-| ⚡ **Fast** | 80💰 | 5 | Weit | Sehr schnell | Perfekt für schnelle Gegner |
+### Tower Upgrades (L1 → L2 → L3)
+- **Level 2:** 1.65× damage, 1.2× range (costs 1.5× base price)
+- **Level 3:** 2.6× damage, 1.45× range (costs 2.5× base price)
+- Level 2 shows a **gold ring** ⬛, Level 3 shows a **red ring**
 
-### 💰 Wirtschaft
-- **Startgeld**: 200💰
-- **Gegner töten**: +10-20💰 (steigt mit Wellen)
-- **Welle abschließen**: +50💰 Bonus
-- **Turm verkaufen**: 50% Rückerstattung
+## 👾 Enemy Types
 
-### 🌊 Wellen
-Jede Welle wird schwieriger:
-- Mehr Gegner spawnen
-- Gegner haben mehr Leben
-- Gegner bewegen sich schneller
-- Höhere Belohnungen
+| Icon | Name  | Appears | Special |
+|------|-------|---------|---------|
+| 👾   | Normal | Wave 1+ | Standard enemy |
+| 🏃   | Fast  | Wave 3+ | 2.5× speed, 0.45× HP |
+| 🛡️   | Tank  | Wave 5+ | 3.5× HP, 0.45× speed |
+| 💀   | Boss  | W5,10,15… | 7× HP, drops big reward |
 
-### 🎯 Strategie-Tipps
-1. **Platziere Basic-Türme** früh am Pfad für maximale Schuss-Zeit
-2. **Heavy-Türme** sind ideal an Ecken/Kurven
-3. **Fast-Türme** eignen sich gut für Lücken in der Verteidigung
-4. **Mix & Match**: Kombiniere verschiedene Türme für optimale Abdeckung
-5. **Range-Anzeige**: Klicke auf einen Turm, um seine Reichweite zu sehen
+## ⌨️ Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| Space / P | Pause / Unpause |
+| Enter | Start next wave |
+| Esc | Deselect tower |
+| Shift + Click | Place multiple towers without deselecting |
+
+## 🎯 Scoring
+
+- Kill reward: enemy's gold value × 1.5
+- Wave complete bonus: 30 + (wave × 12) 💰
+- High score is saved via localStorage
 
 ## 🛠️ Tech Stack
-- **HTML5 Canvas** für Rendering
-- **Vanilla JavaScript** (keine Frameworks)
-- **CSS3** für UI
-- **RequestAnimationFrame** für Game Loop
 
-## 📁 Datei-Struktur
+- Vanilla JavaScript (no frameworks)
+- HTML5 Canvas 2D API
+- CSS3 with gradients and animations
+- localStorage for high score
+- `requestAnimationFrame` game loop
+
+## 📁 Files
+
 ```
 tower-defense-game/
-├── index.html      # Haupt-HTML mit Canvas und UI
-├── style.css       # Styling und Layout
-├── game.js         # Game Logic, Klassen, Game Loop
-└── README.md       # Diese Datei
+├── index.html   — Game structure and UI
+├── style.css    — Styling and animations  
+├── game.js      — All game logic
+└── README.md    — This file
 ```
 
-## 🚀 Features
-- ✅ Drei verschiedene Turm-Typen
-- ✅ Wellensystem mit Schwierigkeitssteigerung
-- ✅ Intelligentes Targeting (Gegner am weitesten im Pfad)
-- ✅ Gesundheitsbalken für Gegner
-- ✅ Reichweitenanzeige
-- ✅ Sell-Funktion
-- ✅ Responsive Design
+## 🔄 Version History
 
-## 🔮 Geplante Features
-- 🔄 Sound-Effekte
-- 🔄 Mehr Turm-Typen (Area Damage, Slow, etc.)
-- 🔄 Spezial-Gegner (Schnell, Tank, Fliegend)
-- 🔄 Partikel-Effekte
-- 🔄 Multiple Maps
-- 🔄 Highscore-System
-- 🔄 Achievements
-
-## 🐚 Made by Shelldon
-Built with 💜 using OpenClaw
+- **v1.0** (2026-02-16): Initial build — 3 towers, wave system, basic enemies
+- **v2.0** (2026-02-17): 
+  - +3 new tower types (Cryo, Sniper, Bomber/Area)
+  - Tower upgrade system (3 levels with stats + visual rings)
+  - 4 enemy types (Normal, Fast, Tank, Boss)
+  - Particle system (explosions, hit flashes, floating gold text)
+  - Hover preview with range circle while placing towers
+  - Proper path cell collision (all segment cells, not just waypoints)
+  - Score system + localStorage highscore
+  - Pause (Space/P) and speed control (1x/2x/3x between waves)
+  - Tower info panel with kills counter
+  - Wave complete banner animation
+  - Game over overlay
+  - Keyboard shortcuts
+  - Shift+click to place multiple towers

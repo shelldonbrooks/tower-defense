@@ -498,6 +498,7 @@ class Enemy {
         this.isTank       = cfg.isTank       || false;
         this.isFast       = cfg.isFast       || false;
         this.isSlowImmune = cfg.isSlowImmune || false;
+        this.armorReduce  = cfg.armorReduce  || 0;  // 0-1: fraction of damage blocked
 
         this.pathIndex = 0;
         this.progress  = 0;
@@ -616,6 +617,14 @@ class Enemy {
             ctx.fillText('🛡', this.x + this.radius - 1, this.y - this.radius + 1);
         }
 
+        // Armor indicator
+        if (this.armorReduce > 0) {
+            ctx.font = '9px Arial';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText('🔩', this.x - this.radius + 1, this.y - this.radius + 1);
+        }
+
         // Cryo glow
         if (this.slowedUntil > Date.now()) {
             ctx.strokeStyle = 'rgba(0, 188, 212, 0.8)';
@@ -688,8 +697,12 @@ class Enemy {
         ctx.fillRect(bx, by, bw * hRatio, bh);
     }
 
-    takeDamage(dmg) {
-        this.health -= dmg;
+    takeDamage(dmg, isSplash = false) {
+        // Armor reduces non-splash damage
+        const effective = this.armorReduce > 0 && !isSplash
+            ? dmg * (1 - this.armorReduce)
+            : dmg;
+        this.health -= effective;
         return this.health <= 0;
     }
 
@@ -798,7 +811,7 @@ class Tower {
             this.totalDmg += stats.damage;
             totalDamageDealt += stats.damage;
             hitCount++;
-            if (e.takeDamage(stats.damage)) {
+            if (e.takeDamage(stats.damage, true)) {  // pulse ignores armor (area effect)
                 this.kills++;
                 killEnemy(i);
             }
@@ -1030,7 +1043,7 @@ class Projectile {
                     spawnHitFlash(e.x, e.y, this.color);
                     if (this.tower) this.tower.totalDmg += this.damage;
                     totalDamageDealt += this.damage;
-                    if (e.takeDamage(this.damage)) {
+                    if (e.takeDamage(this.damage, true)) {  // splash = ignores armor
                         if (this.tower) this.tower.kills++;
                         killEnemy(i);
                     }
@@ -1521,6 +1534,23 @@ function buildWaveRoster(waveNum) {
         }
     }
 
+    if (waveNum >= 12) {
+        const mechCount = Math.min(1 + Math.floor((waveNum - 12) / 4), 3);
+        const tankCountPrev = Math.min(1 + Math.floor((waveNum - 5) / 2), 4);
+        for (let i = 0; i < mechCount; i++) {
+            configs.push({
+                health: Math.floor(baseHp * 2.8),
+                speed:  baseSpeed * 0.55,
+                reward: Math.floor(baseReward * 2.5),
+                scoreVal: baseReward * 4.5,
+                icon: '🔩', color: '#78909C', radius: 17,
+                isTank: false, isSlowImmune: false,
+                armorReduce: 0.40,  // 40% damage reduction from non-splash
+                delay: tankCountPrev * 2800 + basicCount * 1400 + i * 2400 + 3500
+            });
+        }
+    }
+
     if (waveNum >= 10) {
         const mutantCount = Math.min(1 + Math.floor((waveNum - 10) / 4), 3);
         const tankCount2  = Math.min(1 + Math.floor((waveNum - 5) / 2), 4);
@@ -1808,10 +1838,11 @@ function updateWavePreview() {
 
     const nextWave = wave + 1;
     const roster = buildWaveRoster(nextWave);
-    const counts = { normal: 0, fast: 0, tank: 0, mutant: 0, boss: 0 };
+    const counts = { normal: 0, fast: 0, tank: 0, mutant: 0, mech: 0, boss: 0 };
     for (const c of roster) {
         if (c.icon === '💀')      counts.boss++;
         else if (c.icon === '🧬') counts.mutant++;
+        else if (c.icon === '🔩') counts.mech++;
         else if (c.isTank)        counts.tank++;
         else if (c.isFast)        counts.fast++;
         else                      counts.normal++;
@@ -1822,6 +1853,7 @@ function updateWavePreview() {
     if (counts.fast)   parts.push(`<span>🏃×${counts.fast}</span>`);
     if (counts.tank)   parts.push(`<span>🛡️×${counts.tank}</span>`);
     if (counts.mutant) parts.push(`<span class="wp-mutant">🧬×${counts.mutant}</span>`);
+    if (counts.mech)   parts.push(`<span class="wp-mech">🔩×${counts.mech}</span>`);
     if (counts.boss)   parts.push(`<span class="wp-boss">💀 BOSS!</span>`);
 
     el.innerHTML = `<strong>Welle ${nextWave}:</strong> ${parts.join(' ')}`;

@@ -1077,8 +1077,13 @@ body {
     font-size: 1.1em;
 }
 
-/* Wave preview mutant style */
+/* Wave preview mutant/mech styles */
 .wp-mutant {
     color: #00C853;
+    font-weight: 600;
+}
+
+.wp-mech {
+    color: #78909C;
     font-weight: 600;
 }

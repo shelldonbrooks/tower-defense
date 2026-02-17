@@ -463,6 +463,8 @@ class Tower {
         this.target    = null;
         this.kills     = 0;
         this.totalDmg  = 0;
+        this.angle     = 0;   // current rotation (radians)
+        this.targetMode = 'first'; // 'first' | 'last' | 'strong' | 'weak'
     }
 
     getStats() {
@@ -495,6 +497,8 @@ class Tower {
             this.target = this.findTarget(stats.range);
         }
 
+        this.updateAngle();
+
         if (this.target && now - this.lastFired >= effectiveRate) {
             const dx = this.target.x - this.x;
             const dy = this.target.y - this.y;
@@ -508,15 +512,33 @@ class Tower {
     }
 
     findTarget(range) {
-        let best = null, maxProg = -1;
+        let best = null;
+        let bestVal = this.targetMode === 'last' ? Infinity
+                    : this.targetMode === 'weak' ? Infinity
+                    : -Infinity;
+
         for (const e of enemies) {
             const dx = e.x - this.x, dy = e.y - this.y;
-            if (Math.sqrt(dx * dx + dy * dy) <= range) {
-                const prog = e.getPathProgress();
-                if (prog > maxProg) { maxProg = prog; best = e; }
+            if (Math.sqrt(dx * dx + dy * dy) > range) continue;
+
+            let val;
+            switch (this.targetMode) {
+                case 'first':  val = e.getPathProgress(); if (val > bestVal) { bestVal = val; best = e; } break;
+                case 'last':   val = e.getPathProgress(); if (val < bestVal) { bestVal = val; best = e; } break;
+                case 'strong': val = e.health;            if (val > bestVal) { bestVal = val; best = e; } break;
+                case 'weak':   val = e.health;            if (val < bestVal) { bestVal = val; best = e; } break;
             }
         }
         return best;
+    }
+
+    updateAngle() {
+        if (!this.target) return;
+        const desired = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+        let diff = desired - this.angle;
+        while (diff >  Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        this.angle += diff * 0.18;
     }
 
     fire(stats) {
@@ -561,17 +583,33 @@ class Tower {
             ctx.stroke();
         }
 
-        // Base
+        // Rotated barrel
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+
+        // Base (rounded square)
         ctx.fillStyle = this.config.color + 'CC';
         ctx.beginPath();
-        ctx.roundRect(this.x - 15, this.y - 15, 30, 30, 5);
+        ctx.roundRect(-15, -15, 30, 30, 5);
         ctx.fill();
         ctx.strokeStyle = this.config.color;
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 1.5;
         ctx.stroke();
 
-        // Icon
-        ctx.font = '20px Arial';
+        // Barrel (pointing right = angle 0, rotates toward target)
+        ctx.fillStyle = this.config.color;
+        ctx.fillRect(6, -3.5, 12, 7);
+        // Barrel tip ring
+        ctx.fillStyle = '#fff';
+        ctx.globalAlpha = 0.4;
+        ctx.fillRect(16, -2.5, 3, 5);
+        ctx.globalAlpha = 1;
+
+        ctx.restore();
+
+        // Icon (on top, not rotated)
+        ctx.font = '14px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(this.config.icon, this.x, this.y);
@@ -1005,6 +1043,18 @@ function updateUI() {
 
     updateTowerPanel();
     updateWavePreview();
+
+    // Enemy counter (only show during wave)
+    const ecWrap = document.getElementById('enemiesStatWrapper');
+    if (ecWrap) {
+        if (waveInProgress || enemies.length > 0) {
+            ecWrap.style.display = 'flex';
+            const total = waveSpawnPending + enemies.length;
+            document.getElementById('enemyCount').textContent = total;
+        } else {
+            ecWrap.style.display = 'none';
+        }
+    }
 }
 
 function updateTowerPanel() {
@@ -1040,6 +1090,11 @@ function updateTowerPanel() {
 
     document.getElementById('sellTower').textContent = `💸 Sell ${sv}💰`;
     document.getElementById('sellTower').disabled    = false;
+
+    // Sync targeting mode buttons
+    document.querySelectorAll('.tm-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.mode === t.targetMode);
+    });
 }
 
 // ================================================================
@@ -1256,6 +1311,17 @@ document.getElementById('upgradeTower').addEventListener('click', () => {
 
 document.getElementById('overlayBtn').addEventListener('click', resetGame);
 
+// Targeting mode buttons (in tower info panel)
+document.querySelectorAll('.tm-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (!selectedTower) return;
+        selectedTower.targetMode = btn.dataset.mode;
+        selectedTower.target = null; // force re-target
+        document.querySelectorAll('.tm-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    });
+});
+
 document.getElementById('soundBtn').addEventListener('click', () => {
     soundEnabled = !soundEnabled;
     document.getElementById('soundBtn').textContent = soundEnabled ? '🔊 Sound' : '🔇 Stumm';
@@ -1289,6 +1355,66 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !waveInProgress) {
         document.getElementById('startWave').click();
     }
+});
+
+// ================================================================
+// SAVE / LOAD (between waves only)
+// ================================================================
+const SAVE_KEY = 'tdSaveV2';
+
+function saveGame() {
+    if (waveInProgress) return; // only save between waves
+    const data = {
+        gold, lives, wave, score, highScore,
+        towers: towers.map(t => ({
+            gx: t.gridX, gy: t.gridY, type: t.type,
+            level: t.level, kills: t.kills, totalDmg: t.totalDmg,
+            targetMode: t.targetMode
+        }))
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    showBanner('💾 Gespeichert!');
+}
+
+function loadGame() {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) { showBanner('❌ Kein Speicherstand!'); return; }
+    try {
+        const data = JSON.parse(raw);
+        resetGame();
+        // Wait one frame so resetGame completes
+        requestAnimationFrame(() => {
+            gold = data.gold || 200;
+            lives = data.lives || 20;
+            wave = data.wave || 0;
+            score = data.score || 0;
+            highScore = Math.max(highScore, data.highScore || 0);
+            localStorage.setItem('tdHighScore', String(highScore));
+
+            for (const td of (data.towers || [])) {
+                const t = new Tower(
+                    td.gx * CELL_SIZE + CELL_SIZE / 2,
+                    td.gy * CELL_SIZE + CELL_SIZE / 2,
+                    td.type
+                );
+                t.level = td.level || 1;
+                t.kills = td.kills || 0;
+                t.totalDmg = td.totalDmg || 0;
+                t.targetMode = td.targetMode || 'first';
+                towers.push(t);
+            }
+            updateUI();
+            showBanner(`📂 Geladen! Welle ${wave} fortgesetzt`);
+        });
+    } catch(e) {
+        showBanner('❌ Ladefehler!');
+    }
+}
+
+// Save/load keyboard shortcuts
+document.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.key === 's') { e.preventDefault(); saveGame(); }
+    if (e.ctrlKey && e.key === 'l') { e.preventDefault(); loadGame(); }
 });
 
 // ================================================================

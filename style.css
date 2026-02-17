@@ -98,7 +98,8 @@ body {
 .stat.lives  { border-color: #F44336; color: #c62828; }
 .stat.wave   { border-color: var(--primary); }
 .stat.score  { border-color: #9C27B0; color: #6a1b9a; }
-.stat.highscore { border-color: #FF9800; color: #e65100; }
+.stat.highscore      { border-color: #FF9800; color: #e65100; }
+.stat.enemies-stat   { border-color: #E91E63; color: #880e4f; }
 
 /* ================================================================
    GAME AREA LAYOUT
@@ -456,6 +457,49 @@ body {
 .overlay-btn {
     font-size: 1.1em;
     padding: 12px 36px;
+}
+
+/* ================================================================
+   TARGET MODE BUTTONS
+   ================================================================ */
+.target-modes {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.tm-label {
+    font-size: 0.72em;
+    font-weight: 700;
+    color: var(--text-dim);
+    white-space: nowrap;
+}
+
+.tm-btn {
+    flex: 1;
+    padding: 4px 4px;
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    background: white;
+    font-size: 0.68em;
+    font-weight: 600;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.15s;
+    min-width: 40px;
+}
+
+.tm-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.tm-btn.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
 }
 
 /* ================================================================

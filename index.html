@@ -46,6 +46,10 @@
                 <span class="stat-icon">🏆</span>
                 <span id="highscore">0</span>
             </div>
+            <div class="stat enemies-stat" id="enemiesStatWrapper" style="display:none;">
+                <span class="stat-icon">👾</span>
+                <span id="enemyCount">0</span>
+            </div>
         </div>
     </div>
 
@@ -109,6 +113,13 @@
                 <h3 class="panel-title">🔍 Ausgewählt</h3>
                 <div id="towerInfoName" class="tower-info-name"></div>
                 <div id="towerInfoStats" class="tower-info-stats"></div>
+                <div class="target-modes">
+                    <span class="tm-label">🎯 Ziel:</span>
+                    <button class="tm-btn active" data-mode="first">Vorne</button>
+                    <button class="tm-btn" data-mode="last">Hinten</button>
+                    <button class="tm-btn" data-mode="strong">Stark</button>
+                    <button class="tm-btn" data-mode="weak">Schwach</button>
+                </div>
                 <div class="tower-info-actions">
                     <button id="upgradeTower" class="btn-upgrade">⬆ Upgrade</button>
                     <button id="sellTower" class="btn-sell">💸 Sell</button>
@@ -155,9 +166,11 @@
             <!-- Keyboard Shortcuts -->
             <div class="panel-section hint-box">
                 <strong>⌨️ Shortcuts</strong><br>
-                <span>Space/P</span> Pause<br>
-                <span>Enter</span> Nächste Welle<br>
-                <span>Esc</span> Auswahl aufheben
+                <span>Space/P</span> Pause &nbsp;
+                <span>Enter</span> Welle<br>
+                <span>Esc</span> Aufheben &nbsp;
+                <span>Ctrl+S</span> Save<br>
+                <span>Ctrl+L</span> Load
             </div>
 
         </div>

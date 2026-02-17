@@ -605,7 +605,6 @@ class Tower {
 
         // Sniper laser sight
         if (this.type === 'sniper' && this.target && this.target.health > 0) {
-            const stats = this.getStats();
             const now2 = Date.now();
             const coolFrac = Math.max(0, Math.min(1, (now2 - this.lastFired) / (stats.fireRate / gameSpeed)));
             const alpha = Math.floor(coolFrac * 200);
@@ -1125,6 +1124,49 @@ function updateAutoWaveDisplay() {
 }
 
 // ================================================================
+// BOSS HP BAR (rendered at top of canvas during boss waves)
+// ================================================================
+function drawBossBar() {
+    const boss = enemies.find(e => e.icon === '💀');
+    if (!boss) return;
+
+    const barW = canvas.width * 0.55;
+    const barH = 20;
+    const barX = (canvas.width - barW) / 2;
+    const barY = 8;
+    const hRatio = boss.health / boss.maxHealth;
+
+    // Background
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.beginPath();
+    ctx.roundRect(barX - 60, barY - 4, barW + 70, barH + 8, 8);
+    ctx.fill();
+
+    // HP bar track
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, barW, barH, 4);
+    ctx.fill();
+
+    // HP fill (purple gradient)
+    const grad = ctx.createLinearGradient(barX, 0, barX + barW * hRatio, 0);
+    grad.addColorStop(0, '#9C27B0');
+    grad.addColorStop(1, '#E040FB');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, barW * hRatio, barH, 4);
+    ctx.fill();
+
+    // Label
+    ctx.font = 'bold 12px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'white';
+    ctx.fillText(`💀 BOSS  ${Math.ceil(boss.health).toLocaleString()} / ${boss.maxHealth.toLocaleString()}`,
+                 canvas.width / 2, barY + barH / 2);
+}
+
+// ================================================================
 // WAVE PREVIEW
 // ================================================================
 function updateWavePreview() {
@@ -1349,6 +1391,9 @@ function gameLoop(timestamp) {
         updateTextParticles();
         ctx.restore(); // end shake transform
 
+        // Boss HP bar (drawn after ctx.restore so it doesn't shake)
+        drawBossBar();
+
         // Screen flash (boss kill / special events)
         if (screenFlash > 0.01) {
             ctx.fillStyle = `rgba(255,255,255,${screenFlash.toFixed(3)})`;
@@ -1526,6 +1571,25 @@ document.addEventListener('keydown', e => {
     }
     if (e.key === 'Enter' && !waveInProgress) {
         document.getElementById('startWave').click();
+    }
+
+    // Number keys 1-6 for tower selection
+    const towerKeys = ['1','2','3','4','5','6'];
+    const towerOrder = ['basic','heavy','fast','slow','sniper','area'];
+    const ki = towerKeys.indexOf(e.key);
+    if (ki !== -1) {
+        const type = towerOrder[ki];
+        const cfg  = TOWER_TYPES[type];
+        if (gold >= cfg.cost) {
+            selectedTowerType = (selectedTowerType === type) ? null : type;
+            selectedTower = null;
+            document.querySelectorAll('.tower-btn').forEach(b => b.classList.remove('selected'));
+            if (selectedTowerType) {
+                const btn = document.querySelector(`.tower-btn[data-type="${type}"]`);
+                if (btn) btn.classList.add('selected');
+            }
+            updateUI();
+        }
     }
 });
 

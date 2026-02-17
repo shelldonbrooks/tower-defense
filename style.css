@@ -206,6 +206,19 @@ body {
     position: relative;
 }
 
+.tb-hotkey {
+    position: absolute;
+    top: 3px;
+    left: 5px;
+    font-size: 0.6em;
+    font-weight: 900;
+    color: var(--text-dim);
+    background: #f0f0f0;
+    border-radius: 3px;
+    padding: 1px 4px;
+    font-family: monospace;
+}
+
 .tower-btn:hover:not(.disabled) {
     border-color: var(--primary);
     transform: translateY(-2px);

@@ -105,6 +105,7 @@ function sfxFire(type) {
         case 'sniper': _tone({ freq: 160, type: 'sawtooth', dur: 0.02, vol: 0.38, decay: 0.35, sweep: 50 }); break;
         case 'area':   _tone({ freq: 110, type: 'sawtooth', dur: 0.10, vol: 0.40, decay: 0.45, sweep: 30 }); break;
         case 'arc':    _tone({ freq: 1400, type: 'sawtooth', dur: 0.06, vol: 0.22, decay: 0.14, sweep: 400 }); break;
+        case 'poison': _tone({ freq: 280,  type: 'sine',     dur: 0.14, vol: 0.18, decay: 0.22, sweep: 180 }); break;
     }
 }
 
@@ -287,6 +288,20 @@ const TOWER_TYPES = {
         projectileRadius: 8,
         splashRadius: 75
     },
+    poison: {
+        name: 'Poison',
+        desc: 'Vergiftet Gegner (DoT 4s)',
+        cost: 90,
+        damage: 8,
+        range: 140,
+        fireRate: 1500,
+        color: '#76FF03',
+        icon: '🧪',
+        projectileSpeed: 5,
+        projectileRadius: 6,
+        poisonDPS: 20,
+        poisonDuration: 4000
+    },
     arc: {
         name: 'Arc',
         desc: 'Kettenblitz (3 Ziele)',
@@ -418,7 +433,19 @@ class Enemy {
         this.x = PATH_WAYPOINTS[0].x * CELL_SIZE + CELL_SIZE / 2;
         this.y = PATH_WAYPOINTS[0].y * CELL_SIZE + CELL_SIZE / 2;
 
-        this.slowedUntil = 0;
+        this.slowedUntil  = 0;
+        this.poisonDPS    = 0;
+        this.poisonEnd    = 0;
+        this.poisonSource = null;
+        this.regenDPS     = cfg.regenDPS || 0;
+        this._lastTick    = 0;
+    }
+
+    applyPoison(dps, duration, tower) {
+        this.poisonDPS    = dps;
+        this.poisonEnd    = Date.now() + duration;
+        this.poisonSource = tower;
+        if (this._lastTick === 0) this._lastTick = Date.now();
     }
 
     applySlowEffect(slowAmt, duration) {
@@ -435,6 +462,27 @@ class Enemy {
         if (this.slowedUntil && now > this.slowedUntil) {
             this.speed = this.baseSpeed;
             this.slowedUntil = 0;
+        }
+
+        // Time-delta for DOT / regen
+        if (this._lastTick === 0) this._lastTick = now;
+        const dtSec = Math.min((now - this._lastTick) / 1000, 0.1);
+        this._lastTick = now;
+
+        // Poison DOT (time-based)
+        if (this.poisonEnd && now > this.poisonEnd) {
+            this.poisonDPS = 0; this.poisonEnd = 0; this.poisonSource = null;
+        }
+        if (this.poisonDPS > 0 && dtSec > 0) {
+            const dotDmg = this.poisonDPS * dtSec;
+            this.health -= dotDmg;
+            if (this.poisonSource) this.poisonSource.totalDmg += dotDmg;
+            totalDamageDealt += dotDmg;
+        }
+
+        // Regen (only when NOT poisoned)
+        if (this.regenDPS > 0 && this.poisonDPS === 0 && this.health < this.maxHealth && dtSec > 0) {
+            this.health = Math.min(this.maxHealth, this.health + this.regenDPS * dtSec);
         }
 
         if (this.pathIndex >= PATH_WAYPOINTS.length - 1) return true;
@@ -503,6 +551,34 @@ class Enemy {
             ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.radius + 5, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        // Poison glow
+        if (this.poisonEnd > Date.now()) {
+            const pulse = 0.6 + Math.sin(Date.now() / 150) * 0.3;
+            ctx.strokeStyle = `rgba(100,255,50,${pulse})`;
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius + 4, 0, Math.PI * 2);
+            ctx.stroke();
+            if (particles.length < MAX_PARTICLES - 5 && Math.random() < 0.22) {
+                particles.push(new Particle(
+                    this.x + (Math.random() - 0.5) * this.radius * 2,
+                    this.y - this.radius * 0.5 + (Math.random() - 0.5) * this.radius,
+                    '#76FF03', (Math.random() - 0.5) * 0.4, -0.9 - Math.random() * 0.5,
+                    12 + Math.floor(Math.random() * 8), 2.5
+                ));
+            }
+        }
+
+        // Regen glow (subtle green pulse when regenerating and not poisoned)
+        if (this.regenDPS > 0 && this.poisonDPS === 0 && this.health < this.maxHealth) {
+            const repulse = 0.2 + Math.abs(Math.sin(Date.now() / 400)) * 0.25;
+            ctx.strokeStyle = `rgba(0,200,83,${repulse})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius + 7, 0, Math.PI * 2);
             ctx.stroke();
         }
 
@@ -663,7 +739,9 @@ class Tower {
             this.config.slowDuration || null,
             this.config.chainRange   || 0,
             this.config.chainHits    || 0,
-            this.config.chainDmgMult || 0.65
+            this.config.chainDmgMult || 0.65,
+            this.config.poisonDPS      || 0,
+            this.config.poisonDuration || 0
         ));
     }
 
@@ -765,7 +843,8 @@ class Projectile {
     constructor(x, y, target, damage, speed, color, radius,
                 isSplash = false, splashR = 0, tower = null,
                 slowAmt = null, slowDur = null,
-                chainRange = 0, chainHits = 0, chainDmgMult = 0.65) {
+                chainRange = 0, chainHits = 0, chainDmgMult = 0.65,
+                poisonDPS = 0, poisonDuration = 0) {
         this.x = x; this.y = y;
         this.target = target;
         this.damage = damage;
@@ -781,6 +860,8 @@ class Projectile {
         this.chainRange  = chainRange;
         this.chainHits   = chainHits;
         this.chainDmgMult = chainDmgMult;
+        this.poisonDPS      = poisonDPS;
+        this.poisonDuration = poisonDuration;
     }
 
     update(now) {
@@ -831,6 +912,9 @@ class Projectile {
                 spawnHitFlash(this.target.x, this.target.y, this.color);
                 if (this.slowAmt && this.slowDur) {
                     this.target.applySlowEffect(this.slowAmt, this.slowDur);
+                }
+                if (this.poisonDPS && this.poisonDuration) {
+                    this.target.applyPoison(this.poisonDPS, this.poisonDuration, this.tower);
                 }
                 if (this.tower) this.tower.totalDmg += this.damage;
                 totalDamageDealt += this.damage;
@@ -897,6 +981,7 @@ function triggerBossDrop() {
         damageBoostMult = 1.75;
         damageBoostEnd  = Date.now() + 30000;
         sfxUpgrade();
+        unlockAchievement('full_upgrade');
         showBanner('⚡ POWER SURGE! +75% Schaden für 30s!');
     } else if (roll < 0.35) {
         // Extra life
@@ -936,6 +1021,11 @@ function killEnemy(idx) {
         highScore = score;
         localStorage.setItem('tdHighScore', String(highScore));
     }
+    // Achievements
+    checkAchievements();
+    if (isBoss) unlockAchievement('boss_kill');
+    if (e && e.icon === '🧬') unlockAchievement('mutant_kill');
+
     // Kill milestones
     if (totalKills === 100) showBanner('🎖 100 Gegner besiegt!');
     else if (totalKills === 500) showBanner('🏅 500 Gegner besiegt!');
@@ -953,6 +1043,7 @@ function killEnemy(idx) {
         const ex = e.x ?? (canvas.width / 2), ey = e.y ?? (canvas.height / 2);
         spawnFloatText(ex, ey - 30, `🔥 COMBO! +${comboGold}💰`, '#FF6B6B');
         sfxUpgrade();
+        unlockAchievement('combo');
         setTimeout(() => { comboActive = false; }, 500);
     }
 }
@@ -1167,6 +1258,24 @@ function buildWaveRoster(waveNum) {
         }
     }
 
+    if (waveNum >= 10) {
+        const mutantCount = Math.min(1 + Math.floor((waveNum - 10) / 4), 3);
+        const tankCount2  = Math.min(1 + Math.floor((waveNum - 5) / 2), 4);
+        for (let i = 0; i < mutantCount; i++) {
+            const mHp = Math.floor(baseHp * 2.2);
+            configs.push({
+                health: mHp,
+                speed:  baseSpeed * 0.70,
+                reward: Math.floor(baseReward * 2.0),
+                scoreVal: baseReward * 3.5,
+                icon: '🧬', color: '#00C853', radius: 15,
+                isTank: false, isSlowImmune: false,
+                regenDPS: Math.max(1, Math.floor(mHp * 0.015)), // 1.5% max HP/s regen
+                delay: basicCount * 1200 + tankCount2 * 2500 + i * 2200 + 2500
+            });
+        }
+    }
+
     if (waveNum % 5 === 0) {
         configs.push({
             health: Math.floor(baseHp * 7),
@@ -1257,6 +1366,10 @@ function checkWaveComplete() {
         const noLeakBonus = 25;
         totalBonus += noLeakBonus;
         bonusParts.push(`+${noLeakBonus}💰 Kein Schaden!`);
+        _noLeakCount++;
+        if (_noLeakCount >= 3) unlockAchievement('no_leak_3');
+    } else {
+        _noLeakCount = 0;
     }
 
     // Interest: 5% of current gold (capped at 80)
@@ -1278,6 +1391,7 @@ function checkWaveComplete() {
     sfxWaveComplete();
     const shortParts = bonusParts.slice(0, 2).join(' · ');
     showBanner(`🌊 Welle ${wave}! ${shortParts}`);
+    checkAchievements();
     updateUI();
 
     // Auto-save between waves (silent)
@@ -1388,18 +1502,20 @@ function updateWavePreview() {
 
     const nextWave = wave + 1;
     const roster = buildWaveRoster(nextWave);
-    const counts = { normal: 0, fast: 0, tank: 0, boss: 0 };
+    const counts = { normal: 0, fast: 0, tank: 0, mutant: 0, boss: 0 };
     for (const c of roster) {
-        if (c.icon === '💀') counts.boss++;
-        else if (c.isTank) counts.tank++;
-        else if (c.isFast) counts.fast++;
-        else counts.normal++;
+        if (c.icon === '💀')      counts.boss++;
+        else if (c.icon === '🧬') counts.mutant++;
+        else if (c.isTank)        counts.tank++;
+        else if (c.isFast)        counts.fast++;
+        else                      counts.normal++;
     }
 
     const parts = [];
     if (counts.normal) parts.push(`<span>👾×${counts.normal}</span>`);
     if (counts.fast)   parts.push(`<span>🏃×${counts.fast}</span>`);
     if (counts.tank)   parts.push(`<span>🛡️×${counts.tank}</span>`);
+    if (counts.mutant) parts.push(`<span class="wp-mutant">🧬×${counts.mutant}</span>`);
     if (counts.boss)   parts.push(`<span class="wp-boss">💀 BOSS!</span>`);
 
     el.innerHTML = `<strong>Welle ${nextWave}:</strong> ${parts.join(' ')}`;
@@ -1463,11 +1579,15 @@ function updateTowerPanel() {
 
     const dps = (s.damage * (1000 / s.fireRate)).toFixed(1);
     const chainNote = t.config.chainHits ? ` ×${t.config.chainHits + 1}` : '';
+    const poisonNote = t.config.poisonDPS
+        ? `<span>🧪 ${t.config.poisonDPS}/s DoT</span>`
+        : '';
     document.getElementById('towerInfoStats').innerHTML =
         `<span>💥 ${Math.round(s.damage)}${chainNote}</span>` +
         `<span>📏 ${Math.round(s.range)}</span>` +
         `<span>🔥 ${(1000 / s.fireRate).toFixed(1)}/s</span>` +
         `<span>📊 ${dps} DPS</span>` +
+        poisonNote +
         `<span>🎯 ${t.kills} kills</span>` +
         `<span>💢 ${Math.floor(t.totalDmg).toLocaleString()}</span>`;
 
@@ -1543,7 +1663,7 @@ function resetGame() {
     waveSpawnPending = 0; lastTimestamp = 0; hoverCell = null;
     gameSpeed = 1; autoWaveCountdown = 0; screenFlash = 0; shakeAmount = 0;
     damageBoostMult = 1.0; damageBoostEnd = 0; prevBoostActive = false;
-    recentKillTimes = []; comboActive = false;
+    recentKillTimes = []; comboActive = false; _noLeakCount = 0;
     clearTimeout(autoWaveTimer); autoWaveTimer = null;
     updateAutoWaveDisplay();
 
@@ -1586,7 +1706,12 @@ function gameLoop(timestamp) {
 
         for (let i = enemies.length - 1; i >= 0; i--) {
             const e = enemies[i];
-            if (e.update(now)) {
+            const reachedExit = e.update(now);
+            if (e.health <= 0) {
+                // DOT kill — attribute to poison tower
+                if (e.poisonSource) e.poisonSource.kills++;
+                killEnemy(i);
+            } else if (reachedExit) {
                 lives--;
                 spawnExplosion(e.x, e.y, '#F44336', 8);
                 sfxLifeLost();
@@ -1745,6 +1870,7 @@ canvas.addEventListener('click', e => {
                 gold -= cfg.cost;
                 towers.push(new Tower(cx, cy, selectedTowerType));
                 sfxPlace();
+                checkAchievements();
                 if (!e.shiftKey) {
                     selectedTowerType = null;
                     document.querySelectorAll('.tower-btn').forEach(b => b.classList.remove('selected'));
@@ -1775,9 +1901,10 @@ document.querySelectorAll('.tower-btn').forEach(btn => {
         const cfg = TOWER_TYPES[type];
         if (!cfg) return;
         const dps = (cfg.damage * 1000 / cfg.fireRate).toFixed(1);
-        const extra = cfg.splashRadius ? `<div class="tt-stat"><span class="tt-stat-label">💥 Splash</span><span class="tt-stat-value">${cfg.splashRadius}px</span></div>` :
-                      cfg.slowAmount   ? `<div class="tt-stat"><span class="tt-stat-label">🧊 Slow</span><span class="tt-stat-value">${Math.round((1-cfg.slowAmount)*100)}% für ${cfg.slowDuration/1000}s</span></div>` :
-                      cfg.chainHits    ? `<div class="tt-stat"><span class="tt-stat-label">⚡ Kette</span><span class="tt-stat-value">${cfg.chainHits} Bounces</span></div>` : '';
+        const extra = cfg.splashRadius  ? `<div class="tt-stat"><span class="tt-stat-label">💥 Splash</span><span class="tt-stat-value">${cfg.splashRadius}px</span></div>` :
+                      cfg.slowAmount    ? `<div class="tt-stat"><span class="tt-stat-label">🧊 Slow</span><span class="tt-stat-value">${Math.round((1-cfg.slowAmount)*100)}% für ${cfg.slowDuration/1000}s</span></div>` :
+                      cfg.chainHits     ? `<div class="tt-stat"><span class="tt-stat-label">⚡ Kette</span><span class="tt-stat-value">${cfg.chainHits} Bounces</span></div>` :
+                      cfg.poisonDPS     ? `<div class="tt-stat"><span class="tt-stat-label">🧪 DoT</span><span class="tt-stat-value">${cfg.poisonDPS}/s für ${cfg.poisonDuration/1000}s</span></div>` : '';
         const tt = document.getElementById('towerTooltip');
         tt.innerHTML = `<div class="tt-title">${cfg.icon} ${cfg.name}</div>` +
             `<div class="tt-desc">${cfg.desc}</div>` +
@@ -1834,6 +1961,7 @@ document.getElementById('upgradeTower').addEventListener('click', () => {
         gold -= cost;
         selectedTower.level++;
         sfxUpgrade();
+        checkAchievements();
         updateUI();
     }
 });
@@ -1847,6 +1975,25 @@ document.getElementById('helpBtn').addEventListener('click', () => {
     gamePaused = true;
     document.getElementById('helpModal').style.display = 'flex';
     document.getElementById('pauseBtn').textContent = '▶ Weiter';
+});
+
+document.getElementById('achBtn').addEventListener('click', () => {
+    const content = document.getElementById('achContent');
+    if (content) content.innerHTML = renderAchievementsModal();
+    const wasRunning = !gamePaused;
+    if (wasRunning) { gamePaused = true; document.getElementById('pauseBtn').textContent = '▶ Weiter'; }
+    const modal = document.getElementById('achModal');
+    if (modal) { modal.style.display = 'flex'; modal.dataset.wasRunning = wasRunning ? '1' : '0'; }
+});
+
+document.getElementById('closeAch').addEventListener('click', () => {
+    const modal = document.getElementById('achModal');
+    if (!modal) return;
+    modal.style.display = 'none';
+    if (modal.dataset.wasRunning === '1') {
+        gamePaused = false;
+        document.getElementById('pauseBtn').textContent = '⏸ Pause';
+    }
 });
 
 document.getElementById('closeHelp').addEventListener('click', () => {
@@ -1900,9 +2047,9 @@ document.addEventListener('keydown', e => {
         document.getElementById('startWave').click();
     }
 
-    // Number keys 1-6 for tower selection
-    const towerKeys = ['1','2','3','4','5','6','7'];
-    const towerOrder = ['basic','heavy','fast','slow','sniper','area','arc'];
+    // Number keys 1-8 for tower selection
+    const towerKeys = ['1','2','3','4','5','6','7','8'];
+    const towerOrder = ['basic','heavy','fast','slow','sniper','area','arc','poison'];
     const ki = towerKeys.indexOf(e.key);
     if (ki !== -1) {
         const type = towerOrder[ki];
@@ -2008,6 +2155,115 @@ function renderLeaderboard() {
     ).join('');
     return `<div class="go-tower-stats"><strong>🏆 Bestenliste:</strong>` +
            `<table class="lb-table">${rows}</table></div>`;
+}
+
+// ================================================================
+// ACHIEVEMENT SYSTEM
+// ================================================================
+const ACH_KEY = 'tdAchievementsV1';
+
+const ACHIEVEMENTS = [
+    { id: 'first_kill',     icon: '🎯', name: 'Erster Kill',       desc: 'Ersten Gegner töten' },
+    { id: 'first_tower',    icon: '🗼', name: 'Turmbauer',          desc: 'Ersten Turm platzieren' },
+    { id: 'wave_5',         icon: '🌊', name: 'Veteran',            desc: 'Welle 5 überstehen' },
+    { id: 'wave_10',        icon: '🔥', name: 'Kämpfer',            desc: 'Welle 10 überstehen' },
+    { id: 'wave_15',        icon: '⚔️', name: 'Krieger',            desc: 'Welle 15 überstehen' },
+    { id: 'wave_20',        icon: '🏆', name: 'Meister',            desc: 'Welle 20 erreichen' },
+    { id: 'wave_25',        icon: '🌟', name: 'Legende',            desc: 'Welle 25 erreichen' },
+    { id: 'kills_100',      icon: '🎖', name: 'Hundert',            desc: '100 Gegner besiegt' },
+    { id: 'kills_500',      icon: '🏅', name: 'Fünfhundert',        desc: '500 Gegner besiegt' },
+    { id: 'kills_1000',     icon: '💫', name: 'Tausend Kills',      desc: '1000 Gegner besiegt' },
+    { id: 'towers_10',      icon: '🏰', name: 'Festung',            desc: '10 Türme gebaut' },
+    { id: 'max_tower',      icon: '⭐', name: 'Meister-Schmied',    desc: 'Turm auf Max-Level' },
+    { id: 'combo',          icon: '🔥', name: 'Combo King',         desc: 'Ersten Combo ausgelöst' },
+    { id: 'boss_kill',      icon: '💀', name: 'Bossbesieger',       desc: 'Ersten Boss besiegt' },
+    { id: 'no_leak_3',      icon: '🛡', name: 'Unberührbar',        desc: '3 Wellen ohne Schaden' },
+    { id: 'gold_2000',      icon: '💰', name: 'Reicher',            desc: '2000 Gold verdient' },
+    { id: 'gold_5000',      icon: '💎', name: 'Millionär',          desc: '5000 Gold verdient' },
+    { id: 'poison_use',     icon: '🧪', name: 'Giftmischer',        desc: 'Poison Tower platziert' },
+    { id: 'mutant_kill',    icon: '🧬', name: 'Mutation gestoppt',  desc: 'Ersten Mutanten besiegt' },
+    { id: 'full_upgrade',   icon: '🚀', name: 'Power-Up!',          desc: 'Power Surge aktiviert' },
+];
+
+let _achUnlocked = new Set(JSON.parse(localStorage.getItem(ACH_KEY) || '[]'));
+let _noLeakCount = 0; // consecutive waves without lives lost
+
+function saveAchievements() {
+    localStorage.setItem(ACH_KEY, JSON.stringify([..._achUnlocked]));
+}
+
+function unlockAchievement(id) {
+    if (_achUnlocked.has(id)) return;
+    const ach = ACHIEVEMENTS.find(a => a.id === id);
+    if (!ach) return;
+    _achUnlocked.add(id);
+    saveAchievements();
+    // Show a special banner (different color)
+    showAchievementToast(ach);
+    if (soundEnabled) {
+        // Short celebratory jingle
+        [660, 880, 1100].forEach((f, i) => setTimeout(() =>
+            _tone({ freq: f, type: 'sine', dur: 0.08, vol: 0.25, decay: 0.10 }), i * 60));
+    }
+}
+
+let _achToastQueue = [];
+let _achToastActive = false;
+
+function showAchievementToast(ach) {
+    _achToastQueue.push(ach);
+    if (!_achToastActive) processAchievementToastQueue();
+}
+
+function processAchievementToastQueue() {
+    if (_achToastQueue.length === 0) { _achToastActive = false; return; }
+    _achToastActive = true;
+    const ach = _achToastQueue.shift();
+    const toast = document.getElementById('achToast');
+    if (!toast) return;
+    toast.innerHTML = `${ach.icon} <strong>${ach.name}</strong><br><small>${ach.desc}</small>`;
+    toast.classList.add('show');
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(processAchievementToastQueue, 400);
+    }, 2600);
+}
+
+function checkAchievements() {
+    if (towers.length >= 1)    unlockAchievement('first_tower');
+    if (towers.some(t => t.type === 'poison')) unlockAchievement('poison_use');
+    if (towers.some(t => t.level >= 3)) unlockAchievement('max_tower');
+    if (totalKills >= 1)       unlockAchievement('first_kill');
+    if (totalKills >= 100)     unlockAchievement('kills_100');
+    if (totalKills >= 500)     unlockAchievement('kills_500');
+    if (totalKills >= 1000)    unlockAchievement('kills_1000');
+    if (towers.length >= 10)   unlockAchievement('towers_10');
+    if (wave >= 5)             unlockAchievement('wave_5');
+    if (wave >= 10)            unlockAchievement('wave_10');
+    if (wave >= 15)            unlockAchievement('wave_15');
+    if (wave >= 20)            unlockAchievement('wave_20');
+    if (wave >= 25)            unlockAchievement('wave_25');
+    if (totalGoldEarned >= 2000)  unlockAchievement('gold_2000');
+    if (totalGoldEarned >= 5000)  unlockAchievement('gold_5000');
+    if (Date.now() < damageBoostEnd) unlockAchievement('full_upgrade');
+}
+
+function renderAchievementsModal() {
+    const rows = ACHIEVEMENTS.map(a => {
+        const done = _achUnlocked.has(a.id);
+        return `<div class="ach-item ${done ? 'ach-done' : 'ach-locked'}">
+            <span class="ach-icon">${done ? a.icon : '🔒'}</span>
+            <div class="ach-info">
+                <strong>${done ? a.name : '???'}</strong>
+                <small>${done ? a.desc : 'Noch nicht freigeschaltet'}</small>
+            </div>
+            ${done ? '<span class="ach-check">✓</span>' : ''}
+        </div>`;
+    }).join('');
+    return `<div class="ach-grid">${rows}</div>
+        <p style="text-align:center;color:#aaa;margin-top:8px;font-size:12px;">
+            ${_achUnlocked.size}/${ACHIEVEMENTS.length} freigeschaltet
+        </p>`;
 }
 
 // ================================================================

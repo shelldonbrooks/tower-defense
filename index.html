@@ -11,6 +11,18 @@
 <!-- Wave Complete Banner -->
 <div id="waveBanner" class="wave-banner"></div>
 
+<!-- Achievement Toast -->
+<div id="achToast" class="ach-toast"></div>
+
+<!-- Achievement Modal -->
+<div id="achModal" class="overlay" style="display:none;">
+    <div class="overlay-box ach-box">
+        <h2>🏅 Errungenschaften</h2>
+        <div id="achContent"></div>
+        <button id="closeAch" class="btn-primary" style="margin-top:12px;">✖ Schließen</button>
+    </div>
+</div>
+
 <!-- Tower Shop Tooltip -->
 <div id="towerTooltip" class="tower-tooltip" style="display:none;"></div>
 
@@ -56,7 +68,7 @@
             <div class="help-section">
                 <strong>⌨️ Shortcuts</strong>
                 <p>
-                    <kbd>1</kbd>–<kbd>7</kbd> Turm wählen<br>
+                    <kbd>1</kbd>–<kbd>8</kbd> Turm wählen<br>
                     <kbd>Space</kbd> Pause &nbsp; <kbd>Enter</kbd> Welle<br>
                     <kbd>Esc</kbd> Aufheben &nbsp; <kbd>Shift</kbd> Mehrfach platzieren<br>
                     <kbd>Ctrl+S</kbd> Speichern &nbsp; <kbd>Ctrl+L</kbd> Laden
@@ -68,7 +80,15 @@
                     <strong>🧊 Cryo:</strong> Verlangsamt Gegner für 2.5s.<br>
                     <strong>🔭 Sniper:</strong> Laser-Zielführung, hohe Reichweite.<br>
                     <strong>💥 Bomber:</strong> Explosion mit Flächenschaden.<br>
-                    <strong>🌩 Arc:</strong> Kettenblitz — trifft 3 Ziele (70%/45% Schaden).
+                    <strong>🌩 Arc:</strong> Kettenblitz — trifft 3 Ziele (65%/42% Schaden).<br>
+                    <strong>🧪 Poison:</strong> Vergiftet Gegner (DoT: 20 Schaden/s für 4s). Hebt Mutanten-Regeneration auf!
+                </p>
+            </div>
+            <div class="help-section">
+                <strong>🧬 Neue Gegner</strong>
+                <p>
+                    <strong>🧬 Mutant (ab W10):</strong> Regeneriert 1.5% max HP/s. Poison-Türme heben dies auf!<br>
+                    Besondere Schwäche: Cryo + Poison Kombination sehr effektiv.
                 </p>
             </div>
         </div>
@@ -120,7 +140,10 @@
     <div class="header">
         <div class="header-top">
             <h1>🐚 Shelldon's Tower Defense</h1>
-            <button id="helpBtn" class="help-btn" title="Hilfe / How to play">❓</button>
+            <div class="header-btns">
+                <button id="achBtn" class="help-btn" title="Errungenschaften">🏅</button>
+                <button id="helpBtn" class="help-btn" title="Hilfe / How to play">❓</button>
+            </div>
         </div>
         <div class="stats-bar">
             <div class="stat gold">
@@ -215,6 +238,13 @@
                         <span class="tb-cost">110💰</span>
                         <span class="tb-desc">Kettenblitz</span>
                     </button>
+                    <button class="tower-btn" data-type="poison" data-cost="90">
+                        <span class="tb-hotkey">8</span>
+                        <span class="tb-icon">🧪</span>
+                        <span class="tb-name">Poison</span>
+                        <span class="tb-cost">90💰</span>
+                        <span class="tb-desc">Gift DoT</span>
+                    </button>
                 </div>
             </div>
 
@@ -269,6 +299,7 @@
                     <div class="el-row"><span>👾</span> <span>Normal (ab W1)</span></div>
                     <div class="el-row"><span>🏃</span> <span>Fast 2,5× (ab W3)</span></div>
                     <div class="el-row"><span>🛡️</span> <span>Tank 3× HP (ab W5)</span></div>
+                    <div class="el-row"><span>🧬</span> <span>Mutant + Regen (ab W10)</span></div>
                     <div class="el-row"><span>💀</span> <span>Boss (W5,10,15…)</span></div>
                 </div>
             </div>

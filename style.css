@@ -918,3 +918,120 @@ body {
         grid-template-columns: repeat(3, 1fr);
     }
 }
+
+/* ================================================================
+   HEADER BUTTONS GROUP
+   ================================================================ */
+.header-btns {
+    display: flex;
+    gap: 6px;
+}
+
+/* ================================================================
+   ACHIEVEMENT TOAST
+   ================================================================ */
+.ach-toast {
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border: 2px solid #FFD700;
+    border-radius: 12px;
+    padding: 12px 18px;
+    color: #fff;
+    font-size: 0.9em;
+    line-height: 1.4;
+    z-index: 2000;
+    max-width: 240px;
+    text-align: center;
+    box-shadow: 0 4px 20px rgba(255, 215, 0, 0.3);
+    opacity: 0;
+    transform: translateX(120%);
+    transition: opacity 0.3s, transform 0.3s;
+    pointer-events: none;
+}
+
+.ach-toast::before {
+    content: '🏅 Errungen!';
+    display: block;
+    font-size: 0.7em;
+    color: #FFD700;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+}
+
+.ach-toast.show {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+/* ================================================================
+   ACHIEVEMENT MODAL
+   ================================================================ */
+.ach-box {
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.ach-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.ach-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    background: #f9f9f9;
+    font-size: 0.85em;
+    transition: background 0.2s;
+}
+
+.ach-done {
+    background: linear-gradient(90deg, #fff9e6, #fffbe8);
+    border-color: #FFD700;
+}
+
+.ach-locked {
+    opacity: 0.55;
+    filter: grayscale(0.4);
+}
+
+.ach-icon {
+    font-size: 1.6em;
+    width: 2em;
+    text-align: center;
+}
+
+.ach-info {
+    flex: 1;
+}
+
+.ach-info strong {
+    display: block;
+    color: #333;
+}
+
+.ach-info small {
+    color: #777;
+}
+
+.ach-check {
+    color: #4CAF50;
+    font-weight: 700;
+    font-size: 1.1em;
+}
+
+/* Wave preview mutant style */
+.wp-mutant {
+    color: #00C853;
+    font-weight: 600;
+}

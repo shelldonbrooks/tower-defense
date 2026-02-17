@@ -10,7 +10,7 @@ A browser-based tower defense game built with vanilla HTML5 Canvas, CSS, and Jav
 4. Press **▶️ Welle starten** (or **Enter**) to send enemies
 5. Defend your base — don't let enemies reach the 🏁 exit!
 
-## 🗼 Tower Types (7 towers)
+## 🗼 Tower Types (8 towers)
 
 | # | Icon | Name   | Cost  | Damage | Range | Rate   | Special |
 |---|------|--------|-------|--------|-------|--------|---------|
@@ -21,6 +21,9 @@ A browser-based tower defense game built with vanilla HTML5 Canvas, CSS, and Jav
 | 5 | 🔭   | Sniper | 150💰 | 80     | 290px | 0.3/s  | Laser sight |
 | 6 | 💥   | Bomber | 120💰 | 45     | 120px | 0.4/s  | 75px splash |
 | 7 | 🌩   | Arc    | 110💰 | 28     | 135px | 0.6/s  | Chains to 2 more enemies |
+| 8 | 🧪   | Poison | 90💰  | 8      | 140px | 0.67/s | Poisons: 20 dmg/s for 4s (DoT) |
+
+> **Poison Tower tip:** Apply poison to Mutant enemies to cancel their regeneration!
 
 ### Tower Upgrades (up to Level 3)
 - **L2:** ×1.65 damage, ×1.2 range (costs 1.5× base)
@@ -29,12 +32,13 @@ A browser-based tower defense game built with vanilla HTML5 Canvas, CSS, and Jav
 
 ## 👾 Enemy Types
 
-| Icon | Name  | Appears | Notes |
-|------|-------|---------|-------|
-| 👾   | Normal | W1+    | Standard |
-| 🏃   | Fast  | W3+     | 2.6× speed, motion blur |
-| 🛡️   | Tank  | W5+     | 3.5× HP, immune to slow |
-| 💀   | Boss  | W5,10…  | 7× HP, immune to slow, **drops a power-up!** |
+| Icon | Name   | Appears | Notes |
+|------|--------|---------|-------|
+| 👾   | Normal | W1+     | Standard |
+| 🏃   | Fast   | W3+     | 2.6× speed, motion blur |
+| 🛡️   | Tank   | W5+     | 3.5× HP, immune to slow |
+| 🧬   | Mutant | W10+    | 2.2× HP, regenerates 1.5% HP/s (countered by Poison!) |
+| 💀   | Boss   | W5,10…  | 7× HP, immune to slow, **drops a power-up!** |
 
 ### Boss Drops (random)
 - **53%** 💰 Gold drop (80 + wave×8 gold)

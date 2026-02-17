@@ -36,6 +36,11 @@ let autoWaveTimer = null;
 let autoWaveCountdown = 0;
 let shakeAmount = 0;
 let soundEnabled = true;
+let totalKills = 0;
+let totalGoldEarned = 0;
+let totalDamageDealt = 0;
+let gameStartTime = Date.now();
+let sessionWaveHighest = parseInt(localStorage.getItem('tdWaveHigh') || '0');
 
 // ================================================================
 // AUDIO SYSTEM (Web Audio API — no external files)
@@ -121,6 +126,12 @@ function sfxPlace() {
 function sfxSell() {
     if (!soundEnabled) return;
     _tone({ freq: 660, type: 'sine', dur: 0.05, vol: 0.20, decay: 0.10, sweep: 330 });
+}
+
+function sfxGameOver() {
+    if (!soundEnabled) return;
+    [440, 330, 220, 110].forEach((f, i) => setTimeout(() =>
+        _tone({ freq: f, type: 'sawtooth', dur: 0.2, vol: 0.35, decay: 0.3, sweep: f * 0.7 }), i * 200));
 }
 
 // ================================================================
@@ -664,6 +675,14 @@ class Projectile {
         } else {
             this.x += (dx / dist) * this.speed;
             this.y += (dy / dist) * this.speed;
+            // Trail particles
+            if (particles.length < MAX_PARTICLES - 10 && Math.random() < 0.6) {
+                particles.push(new Particle(
+                    this.x + (Math.random() - 0.5) * 3,
+                    this.y + (Math.random() - 0.5) * 3,
+                    this.color, 0, 0, 5, this.radius * 0.5
+                ));
+            }
         }
     }
 
@@ -676,6 +695,7 @@ class Projectile {
                 if (Math.sqrt(dx * dx + dy * dy) <= this.splashR) {
                     spawnHitFlash(e.x, e.y, this.color);
                     if (this.tower) this.tower.totalDmg += this.damage;
+                    totalDamageDealt += this.damage;
                     if (e.takeDamage(this.damage)) {
                         if (this.tower) this.tower.kills++;
                         killEnemy(i);
@@ -690,6 +710,7 @@ class Projectile {
                     this.target.applySlowEffect(this.slowAmt, this.slowDur);
                 }
                 if (this.tower) this.tower.totalDmg += this.damage;
+                totalDamageDealt += this.damage;
                 if (this.target.takeDamage(this.damage)) {
                     if (this.tower) this.tower.kills++;
                     killEnemy(idx);
@@ -718,6 +739,8 @@ function killEnemy(idx) {
     const isBoss = e.icon === '💀';
     gold  += e.reward;
     score += e.scoreVal;
+    totalKills++;
+    totalGoldEarned += e.reward;
     spawnExplosion(e.x, e.y, e.color, isBoss ? 24 : 12);
     spawnFloatText(e.x, e.y - 15, `+${e.reward}💰`);
     sfxKill(isBoss);
@@ -727,6 +750,10 @@ function killEnemy(idx) {
         highScore = score;
         localStorage.setItem('tdHighScore', String(highScore));
     }
+    // Kill milestones
+    if (totalKills === 100) showBanner('🎖 100 Gegner besiegt!');
+    else if (totalKills === 500) showBanner('🏅 500 Gegner besiegt!');
+    else if (totalKills === 1000) showBanner('🏆 1000 Kills! Wahnsinn!');
 }
 
 // ================================================================
@@ -950,6 +977,20 @@ function spawnWave() {
     waveSpawnPending = 0;
     sfxWaveStart();
 
+    // Wave milestones
+    if (wave % 5 === 0) {
+        setTimeout(() => showBanner(`💀 BOSS WELLE ${wave}! Vorbereiten!`), 500);
+        triggerShake(5);
+    } else if (wave === 10 || wave === 20 || wave === 30) {
+        setTimeout(() => showBanner(`🔥 Welle ${wave} — Es wird ernst!`), 400);
+    }
+
+    // Update wave high score
+    if (wave > sessionWaveHighest) {
+        sessionWaveHighest = wave;
+        localStorage.setItem('tdWaveHigh', String(wave));
+    }
+
     waveSpawnTimeouts.forEach(t => clearTimeout(t));
     waveSpawnTimeouts = [];
 
@@ -1141,21 +1182,29 @@ function triggerGameOver() {
     waveSpawnTimeouts.forEach(t => clearTimeout(t));
     waveSpawnTimeouts = [];
     clearTimeout(autoWaveTimer);
+    sfxGameOver();
 
-    // Build tower stats summary
+    // Time played
+    const elapsed = Math.floor((Date.now() - gameStartTime) / 1000);
+    const mins = Math.floor(elapsed / 60);
+    const secs = elapsed % 60;
+    const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+
+    // Build tower stats summary (top 4 by kills)
     const towerStats = towers
         .filter(t => t.kills > 0)
         .sort((a, b) => b.kills - a.kills)
         .slice(0, 4)
-        .map(t => `${t.config.icon} <strong>${t.config.name} L${t.level}</strong>: ${t.kills} kills`)
-        .join('<br>');
+        .map(t => `${t.config.icon} <strong>${t.config.name} L${t.level}</strong>: ${t.kills}x`)
+        .join(' &nbsp; ');
 
     const ol = document.getElementById('gameOverlay');
     document.getElementById('overlayTitle').textContent = '💀 Game Over!';
     document.getElementById('overlayMessage').innerHTML =
         `Welle <strong>${wave}</strong> erreicht &nbsp;|&nbsp; Score: <strong>${score}</strong><br>` +
-        `Highscore: <strong>${highScore}</strong>` +
-        (towerStats ? `<div class="go-tower-stats"><strong>🏆 Top Türme:</strong><br>${towerStats}</div>` : '');
+        `Highscore: <strong>${highScore}</strong> &nbsp;|&nbsp; Zeit: ${timeStr}<br>` +
+        `👾 ${totalKills} Kills &nbsp;|&nbsp; 💥 ${Math.floor(totalDamageDealt).toLocaleString()} Schaden<br>` +
+        (towerStats ? `<div class="go-tower-stats"><strong>🏆 Top Türme:</strong> ${towerStats}</div>` : '');
     document.getElementById('overlayBtn').textContent = '🔄 Neu starten';
     ol.style.display = 'flex';
 }
@@ -1165,6 +1214,8 @@ function resetGame() {
     waveSpawnTimeouts = [];
 
     gold = 200; lives = 20; wave = 0; score = 0;
+    totalKills = 0; totalGoldEarned = 0; totalDamageDealt = 0;
+    gameStartTime = Date.now();
     towers = []; enemies = []; projectiles = [];
     particles = []; textParticles = [];
     selectedTower = null; selectedTowerType = null;

@@ -258,10 +258,10 @@ body {
 
 .tower-info-stats {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 4px;
     margin-bottom: 10px;
-    font-size: 0.78em;
+    font-size: 0.75em;
     color: var(--text);
 }
 

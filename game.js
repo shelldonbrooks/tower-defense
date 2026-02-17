@@ -82,6 +82,7 @@ function sfxFire(type) {
         case 'slow':   _tone({ freq: 500, type: 'sine',     dur: 0.10, vol: 0.20, decay: 0.10, sweep: 800 }); break;
         case 'sniper': _tone({ freq: 160, type: 'sawtooth', dur: 0.02, vol: 0.38, decay: 0.35, sweep: 50 }); break;
         case 'area':   _tone({ freq: 110, type: 'sawtooth', dur: 0.10, vol: 0.40, decay: 0.45, sweep: 30 }); break;
+        case 'arc':    _tone({ freq: 1400, type: 'sawtooth', dur: 0.06, vol: 0.22, decay: 0.14, sweep: 400 }); break;
     }
 }
 
@@ -386,8 +387,9 @@ class Enemy {
         this.icon      = cfg.icon    || '👾';
         this.color     = cfg.color   || '#E91E63';
         this.radius    = cfg.radius  || 12;
-        this.isTank    = cfg.isTank  || false;
-        this.isFast    = cfg.isFast  || false;
+        this.isTank       = cfg.isTank       || false;
+        this.isFast       = cfg.isFast       || false;
+        this.isSlowImmune = cfg.isSlowImmune || false;
 
         this.pathIndex = 0;
         this.progress  = 0;
@@ -398,6 +400,11 @@ class Enemy {
     }
 
     applySlowEffect(slowAmt, duration) {
+        if (this.isSlowImmune) {
+            // Show brief visual that it's immune
+            spawnHitFlash(this.x, this.y, '#78909C');
+            return;
+        }
         this.speed = this.baseSpeed * slowAmt;
         this.slowedUntil = Date.now() + duration;
     }
@@ -458,6 +465,14 @@ class Enemy {
                 }
                 ctx.globalAlpha = 1;
             }
+        }
+
+        // Slow immune indicator (small shield badge)
+        if (this.isSlowImmune) {
+            ctx.font = '9px Arial';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'top';
+            ctx.fillText('🛡', this.x + this.radius - 1, this.y - this.radius + 1);
         }
 
         // Cryo glow
@@ -1052,7 +1067,7 @@ function buildWaveRoster(waveNum) {
                 reward: Math.floor(baseReward * 2.8),
                 scoreVal: baseReward * 5,
                 icon: '🛡️', color: '#607D8B', radius: 19,
-                isTank: true,
+                isTank: true, isSlowImmune: true,
                 delay: basicCount * 1300 + i * 2800 + 2000
             });
         }
@@ -1065,7 +1080,7 @@ function buildWaveRoster(waveNum) {
             reward: Math.floor(baseReward * 6),
             scoreVal: baseReward * 15,
             icon: '💀', color: '#4A148C', radius: 23,
-            isTank: true,
+            isTank: true, isSlowImmune: true,
             delay: basicCount * 1500 + 6000
         });
     }
@@ -1320,11 +1335,15 @@ function updateTowerPanel() {
     document.getElementById('towerInfoName').textContent =
         `${t.config.icon} ${t.config.name} ${lvlNames[t.level - 1] || '★★★'}`;
 
+    const dps = (s.damage * (1000 / s.fireRate)).toFixed(1);
+    const chainNote = t.config.chainHits ? ` ×${t.config.chainHits + 1}` : '';
     document.getElementById('towerInfoStats').innerHTML =
-        `<span>💥 ${Math.round(s.damage)}</span>` +
+        `<span>💥 ${Math.round(s.damage)}${chainNote}</span>` +
         `<span>📏 ${Math.round(s.range)}</span>` +
         `<span>🔥 ${(1000 / s.fireRate).toFixed(1)}/s</span>` +
-        `<span>🎯 ${t.kills} kills</span>`;
+        `<span>📊 ${dps} DPS</span>` +
+        `<span>🎯 ${t.kills} kills</span>` +
+        `<span>💢 ${Math.floor(t.totalDmg).toLocaleString()}</span>`;
 
     const upgradeBtn = document.getElementById('upgradeTower');
     if (uc !== null) {
@@ -1480,6 +1499,41 @@ function gameLoop(timestamp) {
 // ================================================================
 // EVENT LISTENERS
 // ================================================================
+// Touch support
+canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const r  = canvas.getBoundingClientRect();
+    const sx = canvas.width / r.width, sy = canvas.height / r.height;
+    const cx = (touch.clientX - r.left) * sx;
+    const cy = (touch.clientY - r.top)  * sy;
+
+    if (selectedTowerType) {
+        hoverCell = { x: Math.floor(cx / CELL_SIZE), y: Math.floor(cy / CELL_SIZE) };
+    }
+    // Simulate mouse click at touch position
+    canvas.dispatchEvent(new MouseEvent('click', {
+        clientX: touch.clientX, clientY: touch.clientY, bubbles: false
+    }));
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const r  = canvas.getBoundingClientRect();
+    const sx = canvas.width / r.width, sy = canvas.height / r.height;
+    const cx = (touch.clientX - r.left) * sx;
+    const cy = (touch.clientY - r.top)  * sy;
+    hoverCell = selectedTowerType
+        ? { x: Math.floor(cx / CELL_SIZE), y: Math.floor(cy / CELL_SIZE) }
+        : null;
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+    e.preventDefault();
+    if (!selectedTowerType) hoverCell = null;
+}, { passive: false });
+
 canvas.addEventListener('mousemove', e => {
     const r = canvas.getBoundingClientRect();
     const sx = canvas.width / r.width, sy = canvas.height / r.height;

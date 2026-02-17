@@ -187,8 +187,8 @@ body {
    ================================================================ */
 .tower-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 7px;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
 }
 
 .tower-btn {

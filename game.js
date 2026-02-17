@@ -106,6 +106,12 @@ function sfxFire(type) {
         case 'area':   _tone({ freq: 110, type: 'sawtooth', dur: 0.10, vol: 0.40, decay: 0.45, sweep: 30 }); break;
         case 'arc':    _tone({ freq: 1400, type: 'sawtooth', dur: 0.06, vol: 0.22, decay: 0.14, sweep: 400 }); break;
         case 'poison': _tone({ freq: 280,  type: 'sine',     dur: 0.14, vol: 0.18, decay: 0.22, sweep: 180 }); break;
+        case 'pulse':  {
+            // Electric buzz — two tones
+            _tone({ freq: 80,  type: 'square', dur: 0.06, vol: 0.35, decay: 0.15, sweep: 40 });
+            setTimeout(() => _tone({ freq: 1800, type: 'square', dur: 0.04, vol: 0.12, decay: 0.10 }), 30);
+            break;
+        }
     }
 }
 
@@ -339,6 +345,19 @@ const TOWER_TYPES = {
         projectileSpeed: 4,
         projectileRadius: 8,
         splashRadius: 75
+    },
+    pulse: {
+        name: 'Pulse',
+        desc: 'EM-Puls — trifft ALLE in Reichweite',
+        cost: 135,
+        damage: 18,
+        range: 90,
+        fireRate: 900,
+        color: '#CFD8DC',
+        icon: '🧲',
+        projectileSpeed: 0,
+        projectileRadius: 0,
+        isAura: true
     },
     poison: {
         name: 'Poison',
@@ -739,6 +758,16 @@ class Tower {
         const stats = this.getStats();
         const effectiveRate = stats.fireRate / gameSpeed;
 
+        if (this.config.isAura) {
+            // Aura/pulse tower — no targeting, pulses all enemies in range
+            this.angle += 0.015 * gameSpeed; // slow spin
+            if (now - this.lastFired >= effectiveRate) {
+                this.fireAura(stats);
+                this.lastFired = now;
+            }
+            return;
+        }
+
         if (!this.target || this.target.health <= 0) {
             this.target = this.findTarget(stats.range);
         }
@@ -755,6 +784,26 @@ class Tower {
                 this.target = null;
             }
         }
+    }
+
+    fireAura(stats) {
+        sfxFire('pulse');
+        spawnAuraPulse(this.x, this.y, stats.range, this.config.color);
+        let hitCount = 0;
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            const e = enemies[i];
+            const dx = e.x - this.x, dy = e.y - this.y;
+            if (Math.sqrt(dx * dx + dy * dy) > stats.range) continue;
+            spawnHitFlash(e.x, e.y, this.config.color);
+            this.totalDmg += stats.damage;
+            totalDamageDealt += stats.damage;
+            hitCount++;
+            if (e.takeDamage(stats.damage)) {
+                this.kills++;
+                killEnemy(i);
+            }
+        }
+        return hitCount;
     }
 
     findTarget(range) {
@@ -821,6 +870,22 @@ class Tower {
             ctx.beginPath();
             ctx.arc(this.x, this.y, 20 + Math.sin(Date.now() / 150) * 3, 0, Math.PI * 2);
             ctx.stroke();
+        }
+
+        // Pulse/Aura tower: always show range ring with animation
+        if (this.config.isAura) {
+            const elapsed = Date.now() - this.lastFired;
+            const coolFrac = Math.min(1, elapsed / (stats.fireRate / gameSpeed));
+            const pulse2 = 0.15 + coolFrac * 0.45;
+            ctx.strokeStyle = this.config.color;
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = pulse2;
+            ctx.setLineDash([4, 6]);
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, stats.range, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.globalAlpha = 1;
         }
 
         // Sniper laser sight
@@ -1228,6 +1293,25 @@ function drawPath() {
             ctx.restore();
         }
     }
+}
+
+function spawnAuraPulse(x, y, range, color) {
+    if (particles.length >= MAX_PARTICLES - 30) return;
+    const steps = 18;
+    for (let i = 0; i < steps; i++) {
+        const angle = (i / steps) * Math.PI * 2;
+        const r = range * (0.3 + Math.random() * 0.7);
+        particles.push(new Particle(
+            x + Math.cos(angle) * r * 0.4,
+            y + Math.sin(angle) * r * 0.4,
+            color,
+            Math.cos(angle) * (1.5 + Math.random() * 2.5),
+            Math.sin(angle) * (1.5 + Math.random() * 2.5),
+            14, 2.5
+        ));
+    }
+    // Center flash
+    particles.push(new Particle(x, y, color, 0, 0, 10, 8));
 }
 
 function drawSynergyLines() {
@@ -1676,6 +1760,9 @@ function updateTowerPanel() {
     const poisonNote = t.config.poisonDPS
         ? `<span>🧪 ${t.config.poisonDPS}/s DoT</span>`
         : '';
+    const auraNote = t.config.isAura
+        ? `<span title="Hits ALL enemies in range">🧲 Alle Gegner</span>`
+        : '';
     const synergyBonus = t.getSynergyBonus();
     const synergyNote = synergyBonus > 0
         ? `<span title="Synergy: +${Math.round(synergyBonus*100)}% dmg">🔗 +${Math.round(synergyBonus*100)}% Syn</span>`
@@ -1685,7 +1772,7 @@ function updateTowerPanel() {
         `<span>📏 ${Math.round(s.range)}</span>` +
         `<span>🔥 ${(1000 / s.fireRate).toFixed(1)}/s</span>` +
         `<span>📊 ${dps} DPS</span>` +
-        poisonNote +
+        poisonNote + auraNote +
         synergyNote +
         `<span>🎯 ${t.kills} kills</span>` +
         `<span>💢 ${Math.floor(t.totalDmg).toLocaleString()}</span>`;
@@ -2001,7 +2088,8 @@ document.querySelectorAll('.tower-btn').forEach(btn => {
         const cfg = TOWER_TYPES[type];
         if (!cfg) return;
         const dps = (cfg.damage * 1000 / cfg.fireRate).toFixed(1);
-        const extra = cfg.splashRadius  ? `<div class="tt-stat"><span class="tt-stat-label">💥 Splash</span><span class="tt-stat-value">${cfg.splashRadius}px</span></div>` :
+        const extra = cfg.isAura         ? `<div class="tt-stat"><span class="tt-stat-label">🧲 Typ</span><span class="tt-stat-value">Aura — trifft ALLE</span></div>` :
+                      cfg.splashRadius  ? `<div class="tt-stat"><span class="tt-stat-label">💥 Splash</span><span class="tt-stat-value">${cfg.splashRadius}px</span></div>` :
                       cfg.slowAmount    ? `<div class="tt-stat"><span class="tt-stat-label">🧊 Slow</span><span class="tt-stat-value">${Math.round((1-cfg.slowAmount)*100)}% für ${cfg.slowDuration/1000}s</span></div>` :
                       cfg.chainHits     ? `<div class="tt-stat"><span class="tt-stat-label">⚡ Kette</span><span class="tt-stat-value">${cfg.chainHits} Bounces</span></div>` :
                       cfg.poisonDPS     ? `<div class="tt-stat"><span class="tt-stat-label">🧪 DoT</span><span class="tt-stat-value">${cfg.poisonDPS}/s für ${cfg.poisonDuration/1000}s</span></div>` : '';
@@ -2147,9 +2235,9 @@ document.addEventListener('keydown', e => {
         document.getElementById('startWave').click();
     }
 
-    // Number keys 1-8 for tower selection
-    const towerKeys = ['1','2','3','4','5','6','7','8'];
-    const towerOrder = ['basic','heavy','fast','slow','sniper','area','arc','poison'];
+    // Number keys 1-9 for tower selection
+    const towerKeys = ['1','2','3','4','5','6','7','8','9'];
+    const towerOrder = ['basic','heavy','fast','slow','sniper','area','arc','poison','pulse'];
     const ki = towerKeys.indexOf(e.key);
     if (ki !== -1) {
         const type = towerOrder[ki];

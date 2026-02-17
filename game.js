@@ -691,8 +691,45 @@ function killEnemy(idx) {
 // ================================================================
 // DRAW FUNCTIONS
 // ================================================================
+// Pre-generate grass patches for consistent background
+const grassPatches = (() => {
+    const rng = (seed) => {
+        let s = seed;
+        return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+    };
+    const r = rng(42);
+    return Array.from({ length: 180 }, (_, i) => ({
+        x: r() * 800, y: r() * 600,
+        rx: 6 + r() * 12, ry: 3 + r() * 6,
+        angle: r() * Math.PI,
+        alpha: 0.08 + r() * 0.12,
+        shade: r() > 0.5
+    }));
+})();
+
+function drawBackground() {
+    // Base grass fill
+    ctx.fillStyle = '#dde8c8';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Grass patches
+    for (const p of grassPatches) {
+        if (pathCells.has(`${Math.floor(p.x / CELL_SIZE)},${Math.floor(p.y / CELL_SIZE)}`)) continue;
+        ctx.save();
+        ctx.globalAlpha = p.alpha;
+        ctx.fillStyle = p.shade ? '#c8d8a8' : '#b8cc90';
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.angle);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, p.rx, p.ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+}
+
 function drawGrid() {
-    ctx.strokeStyle = '#e0e0e0';
+    ctx.strokeStyle = 'rgba(0,0,0,0.08)';
     ctx.lineWidth = 0.5;
     for (let x = 0; x <= canvas.width; x += CELL_SIZE) {
         ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
@@ -909,6 +946,37 @@ function updateAutoWaveDisplay() {
     }
 }
 
+// ================================================================
+// WAVE PREVIEW
+// ================================================================
+function updateWavePreview() {
+    const el = document.getElementById('wavePreview');
+    if (!el) return;
+
+    if (waveInProgress) {
+        el.innerHTML = '<span class="wp-active">🌊 Welle läuft...</span>';
+        return;
+    }
+
+    const nextWave = wave + 1;
+    const roster = buildWaveRoster(nextWave);
+    const counts = { normal: 0, fast: 0, tank: 0, boss: 0 };
+    for (const c of roster) {
+        if (c.icon === '💀') counts.boss++;
+        else if (c.isTank) counts.tank++;
+        else if (c.isFast) counts.fast++;
+        else counts.normal++;
+    }
+
+    const parts = [];
+    if (counts.normal) parts.push(`<span>👾×${counts.normal}</span>`);
+    if (counts.fast)   parts.push(`<span>🏃×${counts.fast}</span>`);
+    if (counts.tank)   parts.push(`<span>🛡️×${counts.tank}</span>`);
+    if (counts.boss)   parts.push(`<span class="wp-boss">💀 BOSS!</span>`);
+
+    el.innerHTML = `<strong>Welle ${nextWave}:</strong> ${parts.join(' ')}`;
+}
+
 function showBanner(msg) {
     const el = document.getElementById('waveBanner');
     if (!el) return;
@@ -936,6 +1004,7 @@ function updateUI() {
     startBtn.textContent = waveInProgress ? '⏳ Läuft...' : '▶️ Welle starten';
 
     updateTowerPanel();
+    updateWavePreview();
 }
 
 function updateTowerPanel() {
@@ -980,13 +1049,22 @@ function triggerGameOver() {
     gameRunning = false;
     waveSpawnTimeouts.forEach(t => clearTimeout(t));
     waveSpawnTimeouts = [];
+    clearTimeout(autoWaveTimer);
+
+    // Build tower stats summary
+    const towerStats = towers
+        .filter(t => t.kills > 0)
+        .sort((a, b) => b.kills - a.kills)
+        .slice(0, 4)
+        .map(t => `${t.config.icon} <strong>${t.config.name} L${t.level}</strong>: ${t.kills} kills`)
+        .join('<br>');
 
     const ol = document.getElementById('gameOverlay');
-    document.getElementById('overlayTitle').textContent   = '💀 Game Over!';
-    document.getElementById('overlayMessage').innerHTML   =
-        `Welle <strong>${wave}</strong> erreicht<br>` +
-        `Score: <strong>${score}</strong><br>` +
-        `Highscore: <strong>${highScore}</strong>`;
+    document.getElementById('overlayTitle').textContent = '💀 Game Over!';
+    document.getElementById('overlayMessage').innerHTML =
+        `Welle <strong>${wave}</strong> erreicht &nbsp;|&nbsp; Score: <strong>${score}</strong><br>` +
+        `Highscore: <strong>${highScore}</strong>` +
+        (towerStats ? `<div class="go-tower-stats"><strong>🏆 Top Türme:</strong><br>${towerStats}</div>` : '');
     document.getElementById('overlayBtn').textContent = '🔄 Neu starten';
     ol.style.display = 'flex';
 }
@@ -1030,9 +1108,10 @@ function gameLoop(timestamp) {
         ctx.save();
         applyShake();
 
+        drawBackground();
         drawGrid();
-        drawHoverCell();
         drawPath();
+        drawHoverCell();
 
         towers.forEach(t => { t.update(now); t.draw(); });
 
@@ -1149,7 +1228,8 @@ document.getElementById('pauseBtn').addEventListener('click', () => {
 });
 
 document.getElementById('speedBtn').addEventListener('click', () => {
-    if (waveInProgress) return; // Don't change speed mid-wave (spawn timing would break)
+    // Speed change allowed anytime — spawn delays are pre-calculated,
+    // but enemy movement + fire rates scale with gameSpeed live
     gameSpeed = gameSpeed === 1 ? 2 : gameSpeed === 2 ? 3 : 1;
     document.getElementById('speedBtn').textContent = `${gameSpeed}x ⏩`;
 });

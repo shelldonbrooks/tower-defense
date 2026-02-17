@@ -263,6 +263,21 @@ const TOWER_TYPES = {
         projectileSpeed: 4,
         projectileRadius: 8,
         splashRadius: 75
+    },
+    arc: {
+        name: 'Arc',
+        desc: 'Kettenblitz (3 Ziele)',
+        cost: 110,
+        damage: 28,
+        range: 135,
+        fireRate: 1600,
+        color: '#FFEB3B',
+        icon: '🌩',
+        projectileSpeed: 11,
+        projectileRadius: 6,
+        chainRange: 110,
+        chainHits: 2,
+        chainDmgMult: 0.65
     }
 };
 
@@ -320,6 +335,17 @@ function spawnExplosion(x, y, color, count = 12) {
 
 function spawnHitFlash(x, y, color) {
     particles.push(new Particle(x, y, color, 0, -0.8, 10, 9));
+}
+
+function spawnLightning(x1, y1, x2, y2) {
+    const steps = 6;
+    for (let i = 1; i <= steps; i++) {
+        const t = i / (steps + 1);
+        const px = x1 + (x2 - x1) * t + (Math.random() - 0.5) * 10;
+        const py = y1 + (y2 - y1) * t + (Math.random() - 0.5) * 10;
+        particles.push(new Particle(px, py, '#FFEB3B', 0, 0, 7, 3));
+        particles.push(new Particle(px, py, '#FFF9C4', 0, 0, 5, 2));
+    }
 }
 
 function spawnFloatText(x, y, text, color = '#FFD700') {
@@ -595,8 +621,11 @@ class Tower {
             !!this.config.splashRadius,
             this.config.splashRadius || 0,
             this,
-            this.config.slowAmount  || null,
-            this.config.slowDuration || null
+            this.config.slowAmount   || null,
+            this.config.slowDuration || null,
+            this.config.chainRange   || 0,
+            this.config.chainHits    || 0,
+            this.config.chainDmgMult || 0.65
         ));
     }
 
@@ -687,7 +716,8 @@ class Tower {
 class Projectile {
     constructor(x, y, target, damage, speed, color, radius,
                 isSplash = false, splashR = 0, tower = null,
-                slowAmt = null, slowDur = null) {
+                slowAmt = null, slowDur = null,
+                chainRange = 0, chainHits = 0, chainDmgMult = 0.65) {
         this.x = x; this.y = y;
         this.target = target;
         this.damage = damage;
@@ -695,11 +725,14 @@ class Projectile {
         this.color  = color;
         this.radius = radius;
         this.active = true;
-        this.isSplash  = isSplash;
-        this.splashR   = splashR;
-        this.tower     = tower;
-        this.slowAmt   = slowAmt;
-        this.slowDur   = slowDur;
+        this.isSplash    = isSplash;
+        this.splashR     = splashR;
+        this.tower       = tower;
+        this.slowAmt     = slowAmt;
+        this.slowDur     = slowDur;
+        this.chainRange  = chainRange;
+        this.chainHits   = chainHits;
+        this.chainDmgMult = chainDmgMult;
     }
 
     update(now) {
@@ -756,6 +789,40 @@ class Projectile {
                 if (this.target.takeDamage(this.damage)) {
                     if (this.tower) this.tower.kills++;
                     killEnemy(idx);
+                }
+
+                // Chain lightning bounce
+                if (this.chainHits > 0) {
+                    const hitSet = new Set([this.target]);
+                    let lastHit = this.target;
+                    for (let b = 0; b < this.chainHits; b++) {
+                        // Find nearest unhit enemy in chainRange
+                        const next = enemies
+                            .filter(e => !hitSet.has(e))
+                            .sort((a, cc) =>
+                                Math.hypot(a.x - lastHit.x, a.y - lastHit.y) -
+                                Math.hypot(cc.x - lastHit.x, cc.y - lastHit.y)
+                            )[0];
+                        if (!next) break;
+                        const d2next = Math.hypot(next.x - lastHit.x, next.y - lastHit.y);
+                        if (d2next > this.chainRange) break;
+
+                        spawnLightning(lastHit.x, lastHit.y, next.x, next.y);
+                        spawnHitFlash(next.x, next.y, '#FFEB3B');
+
+                        const chainDmg = this.damage * Math.pow(this.chainDmgMult, b + 1);
+                        if (this.tower) this.tower.totalDmg += chainDmg;
+                        totalDamageDealt += chainDmg;
+
+                        const nextIdx = enemies.indexOf(next);
+                        if (next.takeDamage(chainDmg)) {
+                            if (this.tower) this.tower.kills++;
+                            if (nextIdx !== -1) killEnemy(nextIdx);
+                        }
+
+                        hitSet.add(next);
+                        lastHit = next;
+                    }
                 }
             }
         }
@@ -1574,8 +1641,8 @@ document.addEventListener('keydown', e => {
     }
 
     // Number keys 1-6 for tower selection
-    const towerKeys = ['1','2','3','4','5','6'];
-    const towerOrder = ['basic','heavy','fast','slow','sniper','area'];
+    const towerKeys = ['1','2','3','4','5','6','7'];
+    const towerOrder = ['basic','heavy','fast','slow','sniper','area','arc'];
     const ki = towerKeys.indexOf(e.key);
     if (ki !== -1) {
         const type = towerOrder[ki];

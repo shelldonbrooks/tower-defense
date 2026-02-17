@@ -182,32 +182,84 @@ function applyShake() {
 // ================================================================
 // PATH DEFINITION
 // ================================================================
-const PATH_WAYPOINTS = [
-    {x: 0,  y: 7},
-    {x: 5,  y: 7},
-    {x: 5,  y: 2},
-    {x: 11, y: 2},
-    {x: 11, y: 11},
-    {x: 16, y: 11},
-    {x: 16, y: 5},
-    {x: 20, y: 5}
+// ================================================================
+// MAPS (multiple selectable path layouts)
+// ================================================================
+const ALL_MAPS = [
+    {
+        name: 'Snake',
+        icon: '🐍',
+        desc: 'Klassischer Schlangenweg',
+        waypoints: [
+            {x: 0,  y: 7},
+            {x: 5,  y: 7},
+            {x: 5,  y: 2},
+            {x: 11, y: 2},
+            {x: 11, y: 11},
+            {x: 16, y: 11},
+            {x: 16, y: 5},
+            {x: 20, y: 5}
+        ]
+    },
+    {
+        name: 'Zigzag',
+        icon: '⚡',
+        desc: 'Mehrfache Kehrtwendungen',
+        waypoints: [
+            {x: 0,  y: 2},
+            {x: 10, y: 2},
+            {x: 10, y: 7},
+            {x: 2,  y: 7},
+            {x: 2,  y: 12},
+            {x: 12, y: 12},
+            {x: 12, y: 4},
+            {x: 20, y: 4}
+        ]
+    },
+    {
+        name: 'Spiral',
+        icon: '🌀',
+        desc: 'Weite Spirale — lang!',
+        waypoints: [
+            {x: 0,  y: 7},
+            {x: 15, y: 7},
+            {x: 15, y: 1},
+            {x: 1,  y: 1},
+            {x: 1,  y: 13},
+            {x: 20, y: 13}
+        ]
+    }
 ];
 
-// Pre-compute all path cells (including segments between waypoints)
-const pathCells = new Set();
-for (let i = 0; i < PATH_WAYPOINTS.length - 1; i++) {
-    const from = PATH_WAYPOINTS[i];
-    const to   = PATH_WAYPOINTS[i + 1];
-    const dx = Math.sign(to.x - from.x);
-    const dy = Math.sign(to.y - from.y);
-    let cx = from.x, cy = from.y;
-    while (cx !== to.x || cy !== to.y) {
-        pathCells.add(`${cx},${cy}`);
-        cx += dx;
-        cy += dy;
+let selectedMapIndex = 0;
+let PATH_WAYPOINTS = ALL_MAPS[0].waypoints;
+let pathCells = new Set();
+
+function computePathCells() {
+    pathCells.clear();
+    for (let i = 0; i < PATH_WAYPOINTS.length - 1; i++) {
+        const from = PATH_WAYPOINTS[i];
+        const to   = PATH_WAYPOINTS[i + 1];
+        const dx = Math.sign(to.x - from.x);
+        const dy = Math.sign(to.y - from.y);
+        let cx = from.x, cy = from.y;
+        while (cx !== to.x || cy !== to.y) {
+            pathCells.add(`${cx},${cy}`);
+            cx += dx; cy += dy;
+        }
+        pathCells.add(`${to.x},${to.y}`);
     }
-    pathCells.add(`${to.x},${to.y}`);
 }
+
+function selectMap(index) {
+    selectedMapIndex = index;
+    PATH_WAYPOINTS = ALL_MAPS[index].waypoints;
+    computePathCells();
+    // Clear any placed towers (map changed)
+    towers = []; selectedTower = null;
+}
+
+computePathCells(); // initialize with map 0
 
 // ================================================================
 // TOWER TYPES
@@ -2299,6 +2351,10 @@ function showDifficultyScreen() {
         ).join('<br>');
         lbEl.innerHTML = `<strong>🏆 Bestenliste:</strong><br>${top3}`;
     }
+    // Sync map button active state
+    document.querySelectorAll('.map-btn').forEach(btn => {
+        btn.classList.toggle('map-active', parseInt(btn.dataset.map) === selectedMapIndex);
+    });
     document.getElementById('difficultyOverlay').style.display = 'flex';
 }
 
@@ -2314,6 +2370,15 @@ document.querySelectorAll('.diff-btn').forEach(btn => {
         livesAtWaveStart = startLives;
         document.getElementById('difficultyOverlay').style.display = 'none';
         updateUI();
+    });
+});
+
+document.querySelectorAll('.map-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.map);
+        selectMap(idx);
+        document.querySelectorAll('.map-btn').forEach(b => b.classList.remove('map-active'));
+        btn.classList.add('map-active');
     });
 });
 

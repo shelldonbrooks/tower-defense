@@ -604,6 +604,56 @@ body {
 }
 
 /* ================================================================
+   TOWER SHOP TOOLTIP
+   ================================================================ */
+.tower-tooltip {
+    position: fixed;
+    z-index: 500;
+    background: white;
+    border: 2px solid var(--primary);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 0.78em;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+    pointer-events: none;
+    min-width: 160px;
+    max-width: 220px;
+}
+
+.tt-title {
+    font-size: 1em;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 6px;
+}
+
+.tt-desc {
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    font-style: italic;
+}
+
+.tt-stat {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.tt-stat:last-child {
+    border-bottom: none;
+}
+
+.tt-stat-label {
+    color: var(--text-dim);
+}
+
+.tt-stat-value {
+    font-weight: 600;
+    color: var(--text);
+}
+
+/* ================================================================
    WAVE PREVIEW
    ================================================================ */
 .wave-preview {

@@ -45,6 +45,7 @@ let livesAtWaveStart = 20; // track for no-leak bonus
 let screenFlash = 0; // white flash intensity (0-1)
 let damageBoostMult = 1.0;
 let damageBoostEnd  = 0; // timestamp when surge ends
+let prevBoostActive = false;
 
 // ================================================================
 // AUDIO SYSTEM (Web Audio API — no external files)
@@ -1479,8 +1480,10 @@ function resetGame() {
 
     document.querySelectorAll('.tower-btn').forEach(b => b.classList.remove('selected'));
     document.getElementById('gameOverlay').style.display = 'none';
-    document.getElementById('pauseBtn').textContent   = '⏸ Pause';
-    document.getElementById('speedBtn').textContent   = '1x ⏩';
+    document.getElementById('pauseBtn').textContent = '⏸ Pause';
+    document.getElementById('speedBtn').textContent = '1x ⏩';
+    const awb = document.getElementById('autoWaveBtn');
+    if (awb) { awb.checked = false; autoWave = false; }
 
     if (!gameRunning) {
         gameRunning = true;
@@ -1540,6 +1543,28 @@ function gameLoop(timestamp) {
 
         // Boss HP bar (drawn after ctx.restore so it doesn't shake)
         drawBossBar();
+
+        // Surge timer HUD
+        const boostActive = Date.now() < damageBoostEnd;
+        if (boostActive) {
+            const rem = Math.ceil((damageBoostEnd - Date.now()) / 1000);
+            const alpha = rem < 5 ? 0.7 + Math.sin(Date.now() / 200) * 0.3 : 0.9;
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = 'rgba(0,0,0,0.55)';
+            ctx.beginPath();
+            ctx.roundRect(canvas.width / 2 - 90, canvas.height - 32, 180, 24, 8);
+            ctx.fill();
+            ctx.fillStyle = '#FFD700';
+            ctx.font = 'bold 13px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`⚡ POWER SURGE: ${rem}s`, canvas.width / 2, canvas.height - 20);
+            ctx.globalAlpha = 1;
+            prevBoostActive = true;
+        } else if (prevBoostActive) {
+            prevBoostActive = false;
+            showBanner('⚡ Power Surge abgelaufen!');
+        }
 
         // Screen flash (boss kill / special events)
         if (screenFlash > 0.01) {
@@ -1671,6 +1696,32 @@ document.querySelectorAll('.tower-btn').forEach(btn => {
         document.querySelectorAll('.tower-btn').forEach(b => b.classList.remove('selected'));
         if (selectedTowerType) btn.classList.add('selected');
         updateUI();
+    });
+
+    btn.addEventListener('mouseenter', e => {
+        const type = btn.dataset.type;
+        const cfg = TOWER_TYPES[type];
+        if (!cfg) return;
+        const dps = (cfg.damage * 1000 / cfg.fireRate).toFixed(1);
+        const extra = cfg.splashRadius ? `<div class="tt-stat"><span class="tt-stat-label">💥 Splash</span><span class="tt-stat-value">${cfg.splashRadius}px</span></div>` :
+                      cfg.slowAmount   ? `<div class="tt-stat"><span class="tt-stat-label">🧊 Slow</span><span class="tt-stat-value">${Math.round((1-cfg.slowAmount)*100)}% für ${cfg.slowDuration/1000}s</span></div>` :
+                      cfg.chainHits    ? `<div class="tt-stat"><span class="tt-stat-label">⚡ Kette</span><span class="tt-stat-value">${cfg.chainHits} Bounces</span></div>` : '';
+        const tt = document.getElementById('towerTooltip');
+        tt.innerHTML = `<div class="tt-title">${cfg.icon} ${cfg.name}</div>` +
+            `<div class="tt-desc">${cfg.desc}</div>` +
+            `<div class="tt-stat"><span class="tt-stat-label">💥 Schaden</span><span class="tt-stat-value">${cfg.damage}</span></div>` +
+            `<div class="tt-stat"><span class="tt-stat-label">📏 Reichweite</span><span class="tt-stat-value">${cfg.range}px</span></div>` +
+            `<div class="tt-stat"><span class="tt-stat-label">🔥 Rate</span><span class="tt-stat-value">${(1000/cfg.fireRate).toFixed(1)}/s</span></div>` +
+            `<div class="tt-stat"><span class="tt-stat-label">📊 DPS</span><span class="tt-stat-value">${dps}</span></div>` +
+            extra;
+        const r = btn.getBoundingClientRect();
+        tt.style.left = `${r.right + 8}px`;
+        tt.style.top  = `${Math.max(8, r.top - 10)}px`;
+        tt.style.display = 'block';
+    });
+
+    btn.addEventListener('mouseleave', () => {
+        document.getElementById('towerTooltip').style.display = 'none';
     });
 });
 

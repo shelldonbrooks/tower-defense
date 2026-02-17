@@ -1179,6 +1179,91 @@ function killEnemy(idx) {
 }
 
 // ================================================================
+// WAVE EVENTS
+// ================================================================
+const WAVE_EVENTS = [
+    {
+        id: 'gold_rush',
+        name: '💰 Goldrausch!',
+        desc: '+50💰 Bonus',
+        apply: () => {
+            const bonus = 50 + wave * 3;
+            gold += bonus; totalGoldEarned += bonus;
+            spawnFloatText(canvas.width / 2, canvas.height / 2 - 20, `+${bonus}💰 Goldrausch!`, '#FFD700');
+            updateUI();
+        }
+    },
+    {
+        id: 'slow_field',
+        name: '🧊 Kältefeld!',
+        desc: 'Alle Gegner 3s verlangsamt',
+        apply: () => {
+            const now = Date.now();
+            enemies.forEach(e => { if (!e.isSlowImmune) e.applySlowEffect(0.4, 3000); });
+        }
+    },
+    {
+        id: 'mini_surge',
+        name: '⚡ Kurzer Surge!',
+        desc: '+30% Schaden für 10s',
+        apply: () => {
+            damageBoostMult = 1.30;
+            damageBoostEnd  = Math.max(damageBoostEnd, Date.now() + 10000);
+        }
+    },
+    {
+        id: 'repair',
+        name: '❤️ Reparatur!',
+        desc: '+1 Leben',
+        apply: () => {
+            if (lives < (selectedDifficulty === 'easy' ? 30 : selectedDifficulty === 'hard' ? 10 : 20) + 5) {
+                lives = Math.min(lives + 1, 30);
+                updateUI();
+            } else {
+                // Convert to gold instead
+                const bonus = 30;
+                gold += bonus; totalGoldEarned += bonus;
+                spawnFloatText(canvas.width/2, 80, `+${bonus}💰 (max Leben!)`, '#FFD700');
+                updateUI();
+            }
+        }
+    },
+    {
+        id: 'enemy_surge',
+        name: '👾 Gegnerwelle!',
+        desc: '5 Extra-Gegner!',
+        apply: () => {
+            // Spawn 5 extra basic enemies immediately
+            const scaledW   = wave <= 20 ? wave : 20 + Math.sqrt(wave - 20) * 2.5;
+            const hp = Math.floor((28 + scaledW * 14) * 0.6);
+            const spd = Math.min(0.85 + scaledW * 0.065, 3.2);
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    enemies.push(new Enemy({
+                        health: hp, speed: spd, reward: Math.floor(8 + wave * 3),
+                        scoreVal: 12 + wave * 2,
+                        icon: '👾', color: '#E91E63', radius: 12
+                    }));
+                    waveSpawnPending++;
+                    _waveRosterTotal++;
+                }, i * 400);
+            }
+        }
+    }
+];
+
+let lastWaveEvent = null;
+
+function triggerWaveEvent() {
+    // Pick random event (don't repeat same event twice)
+    const pool = WAVE_EVENTS.filter(e => e.id !== (lastWaveEvent ? lastWaveEvent.id : ''));
+    const ev = pool[Math.floor(Math.random() * pool.length)];
+    lastWaveEvent = ev;
+    showBanner(`🎲 Wellenbonus: ${ev.name} — ${ev.desc}`);
+    ev.apply();
+}
+
+// ================================================================
 // DRAW FUNCTIONS
 // ================================================================
 // Pre-generate grass patches for consistent background
@@ -1483,6 +1568,11 @@ function spawnWave() {
     livesAtWaveStart = lives;
     sfxWaveStart();
 
+    // Random wave events (every 3 waves starting at wave 3, skip boss waves)
+    if (wave >= 3 && wave % 5 !== 0 && wave % 3 === 0) {
+        setTimeout(() => triggerWaveEvent(), 1200);
+    }
+
     // Wave milestones
     if (wave === 25) {
         setTimeout(() => {
@@ -1516,6 +1606,7 @@ function spawnWave() {
 
     const roster = buildWaveRoster(wave);
     waveSpawnPending = roster.length;
+    _waveRosterTotal = roster.length;
 
     for (const cfg of roster) {
         const delay = Math.max(50, cfg.delay / gameSpeed);
@@ -1662,6 +1753,43 @@ function drawBossBar() {
 }
 
 // ================================================================
+// WAVE PROGRESS BAR
+// ================================================================
+function drawWaveProgress() {
+    if (!waveInProgress) return;
+    const roster = _waveRosterTotal;
+    if (!roster || roster === 0) return;
+    const remaining = waveSpawnPending + enemies.length;
+    const done = Math.max(0, roster - remaining);
+    const progress = Math.min(1, done / roster);
+
+    const barW = 200;
+    const barH = 6;
+    const barX = canvas.width / 2 - barW / 2;
+    const barY = canvas.height - 14;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.beginPath();
+    ctx.roundRect(barX - 2, barY - 2, barW + 4, barH + 4, 4);
+    ctx.fill();
+
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, barW, barH, 3);
+    ctx.fill();
+
+    const grad2 = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+    grad2.addColorStop(0, '#4CAF50');
+    grad2.addColorStop(1, '#8BC34A');
+    ctx.fillStyle = grad2;
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, barW * progress, barH, 3);
+    ctx.fill();
+}
+
+let _waveRosterTotal = 0; // set when wave starts
+
+// ================================================================
 // WAVE PREVIEW
 // ================================================================
 let _wavePreviewCache = { wave: -1, inProgress: null };
@@ -1716,6 +1844,8 @@ function updateUI() {
     document.getElementById('wave').textContent      = wave;
     document.getElementById('score').textContent     = score;
     document.getElementById('highscore').textContent = highScore;
+    const mapNameEl = document.getElementById('mapName');
+    if (mapNameEl) mapNameEl.textContent = ALL_MAPS[selectedMapIndex].name;
 
     document.querySelectorAll('.tower-btn').forEach(btn => {
         btn.classList.toggle('disabled', gold < parseInt(btn.dataset.cost));
@@ -1927,6 +2057,9 @@ function gameLoop(timestamp) {
 
         // Boss HP bar (drawn after ctx.restore so it doesn't shake)
         drawBossBar();
+
+        // Wave progress bar
+        drawWaveProgress();
 
         // Surge timer HUD
         const boostActive = Date.now() < damageBoostEnd;

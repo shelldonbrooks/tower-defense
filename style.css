@@ -459,6 +459,57 @@ body {
 }
 
 /* ================================================================
+   AUTO-WAVE STATUS
+   ================================================================ */
+.auto-wave-status {
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    color: white;
+    text-align: center;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 0.78em;
+    font-weight: 700;
+    animation: pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+    from { opacity: 0.8; }
+    to   { opacity: 1; }
+}
+
+/* ================================================================
+   TOGGLE LABEL (auto-wave checkbox)
+   ================================================================ */
+.toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    padding: 7px 10px;
+    background: white;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.78em;
+    font-weight: 600;
+    color: var(--text);
+    transition: all 0.18s;
+    user-select: none;
+}
+
+.toggle-label:hover {
+    border-color: var(--primary);
+    background: #f0f4ff;
+}
+
+.toggle-label input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+/* ================================================================
    RESPONSIVE
    ================================================================ */
 @media (max-width: 880px) {

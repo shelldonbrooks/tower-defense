@@ -31,6 +31,116 @@ let waveSpawnPending = 0;
 let waveSpawnTimeouts = [];
 let hoverCell = null;
 let lastTimestamp = 0;
+let autoWave = false;
+let autoWaveTimer = null;
+let autoWaveCountdown = 0;
+let shakeAmount = 0;
+let soundEnabled = true;
+
+// ================================================================
+// AUDIO SYSTEM (Web Audio API — no external files)
+// ================================================================
+let _audioCtx = null;
+function getAC() {
+    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return _audioCtx;
+}
+
+const _soundThrottle = {};
+function _tone({ freq = 440, type = 'sine', dur = 0.15, vol = 0.3, decay = 0.1, sweep = null }) {
+    try {
+        const ac  = getAC();
+        const osc = ac.createOscillator();
+        const g   = ac.createGain();
+        osc.connect(g); g.connect(ac.destination);
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ac.currentTime);
+        if (sweep) osc.frequency.linearRampToValueAtTime(sweep, ac.currentTime + dur);
+        g.gain.setValueAtTime(Math.min(vol, 1), ac.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur + decay);
+        osc.start(); osc.stop(ac.currentTime + dur + decay + 0.02);
+    } catch(e) { /* audio may not be available */ }
+}
+
+function sfxFire(type) {
+    if (!soundEnabled) return;
+    const key = 'fire_' + type;
+    const now = Date.now();
+    if (_soundThrottle[key] && now - _soundThrottle[key] < 200) return;
+    _soundThrottle[key] = now;
+    switch(type) {
+        case 'basic':  _tone({ freq: 350, type: 'square',   dur: 0.04, vol: 0.18, decay: 0.06 }); break;
+        case 'heavy':  _tone({ freq: 90,  type: 'sawtooth', dur: 0.12, vol: 0.32, decay: 0.22, sweep: 40 }); break;
+        case 'fast':   _tone({ freq: 700, type: 'square',   dur: 0.03, vol: 0.12, decay: 0.04 }); break;
+        case 'slow':   _tone({ freq: 500, type: 'sine',     dur: 0.10, vol: 0.20, decay: 0.10, sweep: 800 }); break;
+        case 'sniper': _tone({ freq: 160, type: 'sawtooth', dur: 0.02, vol: 0.38, decay: 0.35, sweep: 50 }); break;
+        case 'area':   _tone({ freq: 110, type: 'sawtooth', dur: 0.10, vol: 0.40, decay: 0.45, sweep: 30 }); break;
+    }
+}
+
+function sfxKill(isBoss) {
+    if (!soundEnabled) return;
+    if (isBoss) {
+        _tone({ freq: 60, type: 'sawtooth', dur: 0.28, vol: 0.5, decay: 0.5, sweep: 20 });
+        setTimeout(() => _tone({ freq: 500, type: 'sine', dur: 0.15, vol: 0.35, decay: 0.25, sweep: 800 }), 200);
+    } else {
+        if (_soundThrottle['kill'] && Date.now() - _soundThrottle['kill'] < 80) return;
+        _soundThrottle['kill'] = Date.now();
+        _tone({ freq: 220, type: 'sawtooth', dur: 0.06, vol: 0.22, decay: 0.10, sweep: 90 });
+    }
+}
+
+function sfxLifeLost() {
+    if (!soundEnabled) return;
+    _tone({ freq: 200, type: 'sawtooth', dur: 0.18, vol: 0.40, decay: 0.25, sweep: 100 });
+}
+
+function sfxWaveStart() {
+    if (!soundEnabled) return;
+    [440, 550, 660].forEach((f, i) => setTimeout(() =>
+        _tone({ freq: f, type: 'sine', dur: 0.09, vol: 0.28, decay: 0.12 }), i * 75));
+}
+
+function sfxWaveComplete() {
+    if (!soundEnabled) return;
+    [440, 550, 660, 880].forEach((f, i) => setTimeout(() =>
+        _tone({ freq: f, type: 'sine', dur: 0.11, vol: 0.30, decay: 0.14 }), i * 80));
+}
+
+function sfxUpgrade() {
+    if (!soundEnabled) return;
+    [440, 660, 880, 1100].forEach((f, i) => setTimeout(() =>
+        _tone({ freq: f, type: 'sine', dur: 0.07, vol: 0.28, decay: 0.10 }), i * 55));
+}
+
+function sfxPlace() {
+    if (!soundEnabled) return;
+    _tone({ freq: 330, type: 'sine', dur: 0.07, vol: 0.22, decay: 0.08, sweep: 440 });
+}
+
+function sfxSell() {
+    if (!soundEnabled) return;
+    _tone({ freq: 660, type: 'sine', dur: 0.05, vol: 0.20, decay: 0.10, sweep: 330 });
+}
+
+// ================================================================
+// SCREEN SHAKE
+// ================================================================
+function triggerShake(amount) {
+    shakeAmount = Math.max(shakeAmount, amount);
+}
+
+function applyShake() {
+    if (shakeAmount > 0.3) {
+        ctx.translate(
+            (Math.random() - 0.5) * shakeAmount,
+            (Math.random() - 0.5) * shakeAmount
+        );
+        shakeAmount *= 0.82;
+    } else {
+        shakeAmount = 0;
+    }
+}
 
 // ================================================================
 // PATH DEFINITION
@@ -411,6 +521,7 @@ class Tower {
 
     fire(stats) {
         if (!this.target) return;
+        sfxFire(this.type);
         projectiles.push(new Projectile(
             this.x, this.y,
             this.target,
@@ -563,10 +674,13 @@ class Projectile {
 function killEnemy(idx) {
     const e = enemies[idx];
     if (!e) return;
+    const isBoss = e.icon === '💀';
     gold  += e.reward;
     score += e.scoreVal;
-    spawnExplosion(e.x, e.y, e.color, 12);
+    spawnExplosion(e.x, e.y, e.color, isBoss ? 24 : 12);
     spawnFloatText(e.x, e.y - 15, `+${e.reward}💰`);
+    sfxKill(isBoss);
+    if (isBoss) triggerShake(14);
     enemies.splice(idx, 1);
     if (score > highScore) {
         highScore = score;
@@ -715,10 +829,15 @@ function buildWaveRoster(waveNum) {
 
 function spawnWave() {
     if (waveInProgress) return;
+    clearTimeout(autoWaveTimer);
+    autoWaveTimer = null;
+    autoWaveCountdown = 0;
+    updateAutoWaveDisplay();
 
     wave++;
     waveInProgress = true;
     waveSpawnPending = 0;
+    sfxWaveStart();
 
     waveSpawnTimeouts.forEach(t => clearTimeout(t));
     waveSpawnTimeouts = [];
@@ -753,8 +872,41 @@ function checkWaveComplete() {
         localStorage.setItem('tdHighScore', String(highScore));
     }
 
+    sfxWaveComplete();
     showBanner(`🌊 Welle ${wave} geschafft! +${bonus}💰`);
     updateUI();
+
+    // Auto-wave countdown
+    if (autoWave) {
+        startAutoWaveCountdown();
+    }
+}
+
+function startAutoWaveCountdown() {
+    const COUNTDOWN_S = 5;
+    autoWaveCountdown = COUNTDOWN_S;
+    updateAutoWaveDisplay();
+    const tick = () => {
+        autoWaveCountdown--;
+        updateAutoWaveDisplay();
+        if (autoWaveCountdown <= 0) {
+            spawnWave();
+        } else {
+            autoWaveTimer = setTimeout(tick, 1000);
+        }
+    };
+    autoWaveTimer = setTimeout(tick, 1000);
+}
+
+function updateAutoWaveDisplay() {
+    const el = document.getElementById('autoWaveStatus');
+    if (!el) return;
+    if (autoWaveCountdown > 0) {
+        el.textContent = `⏱ Nächste Welle in ${autoWaveCountdown}s`;
+        el.style.display = 'block';
+    } else {
+        el.style.display = 'none';
+    }
 }
 
 function showBanner(msg) {
@@ -849,7 +1001,9 @@ function resetGame() {
     selectedTower = null; selectedTowerType = null;
     waveInProgress = false; gamePaused = false;
     waveSpawnPending = 0; lastTimestamp = 0; hoverCell = null;
-    gameSpeed = 1;
+    gameSpeed = 1; autoWaveCountdown = 0;
+    clearTimeout(autoWaveTimer); autoWaveTimer = null;
+    updateAutoWaveDisplay();
 
     document.querySelectorAll('.tower-btn').forEach(b => b.classList.remove('selected'));
     document.getElementById('gameOverlay').style.display = 'none';
@@ -873,6 +1027,8 @@ function gameLoop(timestamp) {
         const now = Date.now();
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.save();
+        applyShake();
 
         drawGrid();
         drawHoverCell();
@@ -885,6 +1041,8 @@ function gameLoop(timestamp) {
             if (e.update(now)) {
                 lives--;
                 spawnExplosion(e.x, e.y, '#F44336', 8);
+                sfxLifeLost();
+                triggerShake(8);
                 enemies.splice(i, 1);
                 if (lives <= 0) { triggerGameOver(); return; }
             } else {
@@ -905,6 +1063,7 @@ function gameLoop(timestamp) {
         }
 
         updateTextParticles();
+        ctx.restore(); // end shake transform
         checkWaveComplete();
         updateUI();
     }
@@ -953,6 +1112,7 @@ canvas.addEventListener('click', e => {
             if (ok) {
                 gold -= cfg.cost;
                 towers.push(new Tower(cx, cy, selectedTowerType));
+                sfxPlace();
                 if (!e.shiftKey) {
                     selectedTowerType = null;
                     document.querySelectorAll('.tower-btn').forEach(b => b.classList.remove('selected'));
@@ -997,6 +1157,7 @@ document.getElementById('speedBtn').addEventListener('click', () => {
 document.getElementById('sellTower').addEventListener('click', () => {
     if (!selectedTower) return;
     gold += selectedTower.getSellValue();
+    sfxSell();
     towers.splice(towers.indexOf(selectedTower), 1);
     selectedTower = null;
     updateUI();
@@ -1008,11 +1169,30 @@ document.getElementById('upgradeTower').addEventListener('click', () => {
     if (cost !== null && gold >= cost) {
         gold -= cost;
         selectedTower.level++;
+        sfxUpgrade();
         updateUI();
     }
 });
 
 document.getElementById('overlayBtn').addEventListener('click', resetGame);
+
+document.getElementById('soundBtn').addEventListener('click', () => {
+    soundEnabled = !soundEnabled;
+    document.getElementById('soundBtn').textContent = soundEnabled ? '🔊 Sound' : '🔇 Stumm';
+});
+
+document.getElementById('autoWaveBtn').addEventListener('change', e => {
+    autoWave = e.target.checked;
+    if (!autoWave) {
+        clearTimeout(autoWaveTimer);
+        autoWaveTimer = null;
+        autoWaveCountdown = 0;
+        updateAutoWaveDisplay();
+    } else if (!waveInProgress && wave > 0) {
+        // Start countdown immediately if a wave was already played
+        startAutoWaveCountdown();
+    }
+});
 
 // Keyboard shortcuts
 document.addEventListener('keydown', e => {

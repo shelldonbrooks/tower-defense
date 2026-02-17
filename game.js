@@ -1029,10 +1029,12 @@ function drawHoverCell() {
 function buildWaveRoster(waveNum) {
     const configs = [];
 
-    const baseHp    = 28 + waveNum * 14;
-    const baseSpeed = 0.85 + waveNum * 0.065;
-    const baseReward = 8 + waveNum * 2;
-    const basicCount = 6 + waveNum * 2;
+    // Diminishing scaling after wave 20 to prevent impossible difficulty
+    const scaledW   = waveNum <= 20 ? waveNum : 20 + Math.sqrt(waveNum - 20) * 2.5;
+    const baseHp    = Math.floor(28 + scaledW * 14);
+    const baseSpeed = Math.min(0.85 + scaledW * 0.065, 3.2); // cap speed at 3.2
+    const baseReward = Math.floor(8 + scaledW * 2);
+    const basicCount = Math.min(6 + waveNum * 2, 30); // cap at 30 basics
 
     for (let i = 0; i < basicCount; i++) {
         configs.push({
@@ -1375,6 +1377,9 @@ function triggerGameOver() {
     clearTimeout(autoWaveTimer);
     sfxGameOver();
 
+    // Save to leaderboard
+    const lb = addToLeaderboard(score, wave);
+
     // Time played
     const elapsed = Math.floor((Date.now() - gameStartTime) / 1000);
     const mins = Math.floor(elapsed / 60);
@@ -1385,17 +1390,17 @@ function triggerGameOver() {
     const towerStats = towers
         .filter(t => t.kills > 0)
         .sort((a, b) => b.kills - a.kills)
-        .slice(0, 4)
+        .slice(0, 3)
         .map(t => `${t.config.icon} <strong>${t.config.name} L${t.level}</strong>: ${t.kills}x`)
-        .join(' &nbsp; ');
+        .join(' &nbsp;·&nbsp; ');
 
     const ol = document.getElementById('gameOverlay');
     document.getElementById('overlayTitle').textContent = '💀 Game Over!';
     document.getElementById('overlayMessage').innerHTML =
-        `Welle <strong>${wave}</strong> erreicht &nbsp;|&nbsp; Score: <strong>${score}</strong><br>` +
-        `Highscore: <strong>${highScore}</strong> &nbsp;|&nbsp; Zeit: ${timeStr}<br>` +
-        `👾 ${totalKills} Kills &nbsp;|&nbsp; 💥 ${Math.floor(totalDamageDealt).toLocaleString()} Schaden<br>` +
-        (towerStats ? `<div class="go-tower-stats"><strong>🏆 Top Türme:</strong> ${towerStats}</div>` : '');
+        `Welle <strong>${wave}</strong> &nbsp;|&nbsp; Score: <strong>${score.toLocaleString()}</strong><br>` +
+        `Zeit: ${timeStr} &nbsp;|&nbsp; 👾 ${totalKills} Kills &nbsp;|&nbsp; 💥 ${Math.floor(totalDamageDealt).toLocaleString()}<br>` +
+        (towerStats ? `<div class="go-tower-stats"><strong>Top Türme:</strong> ${towerStats}</div>` : '') +
+        renderLeaderboard();
     document.getElementById('overlayBtn').textContent = '🔄 Neu starten';
     ol.style.display = 'flex';
 }
@@ -1775,8 +1780,57 @@ document.addEventListener('keydown', e => {
 });
 
 // ================================================================
+// LEADERBOARD
+// ================================================================
+const LB_KEY = 'tdLeaderboardV2';
+
+function getLeaderboard() {
+    return JSON.parse(localStorage.getItem(LB_KEY) || '[]');
+}
+
+function addToLeaderboard(scr, wv) {
+    const lb = getLeaderboard();
+    lb.push({ score: scr, wave: wv, date: new Date().toLocaleDateString('de-DE') });
+    lb.sort((a, b) => b.score - a.score);
+    lb.splice(5);
+    localStorage.setItem(LB_KEY, JSON.stringify(lb));
+    return lb;
+}
+
+function renderLeaderboard() {
+    const lb = getLeaderboard();
+    if (lb.length === 0) return '';
+    const rows = lb.map((e, i) =>
+        `<tr><td>${['🥇','🥈','🥉','4.','5.'][i]}</td>` +
+        `<td><strong>${e.score.toLocaleString()}</strong></td>` +
+        `<td>W${e.wave}</td><td>${e.date}</td></tr>`
+    ).join('');
+    return `<div class="go-tower-stats"><strong>🏆 Bestenliste:</strong>` +
+           `<table class="lb-table">${rows}</table></div>`;
+}
+
+// ================================================================
+// RESPONSIVE CANVAS
+// ================================================================
+function resizeCanvas() {
+    const wrapper = canvas.parentElement;
+    const availW = wrapper ? wrapper.clientWidth : window.innerWidth - 40;
+    const maxW = Math.min(availW, 800);
+    if (maxW < 800) {
+        canvas.style.width  = `${maxW}px`;
+        canvas.style.height = `${Math.round(600 * maxW / 800)}px`;
+    } else {
+        canvas.style.width  = '';
+        canvas.style.height = '';
+    }
+}
+
+window.addEventListener('resize', resizeCanvas);
+
+// ================================================================
 // INIT
 // ================================================================
 gameRunning = true;
 updateUI();
+resizeCanvas();
 requestAnimationFrame(gameLoop);

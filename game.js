@@ -809,8 +809,6 @@ class Tower {
     }
 
     fireAura(stats) {
-        sfxFire('pulse');
-        spawnAuraPulse(this.x, this.y, stats.range, this.config.color);
         let hitCount = 0;
         for (let i = enemies.length - 1; i >= 0; i--) {
             const e = enemies[i];
@@ -824,6 +822,10 @@ class Tower {
                 this.kills++;
                 killEnemy(i);
             }
+        }
+        if (hitCount > 0) {
+            sfxFire('pulse');
+            spawnAuraPulse(this.x, this.y, stats.range, this.config.color);
         }
         return hitCount;
     }
@@ -984,6 +986,22 @@ class Tower {
             ctx.textAlign = 'right';
             ctx.textBaseline = 'top';
             ctx.fillText(`L${this.level}`, this.x + 14, this.y - 15);
+        }
+
+        // Cooldown arc (small clockface in corner)
+        const elapsed2 = Date.now() - this.lastFired;
+        const coolFrac2 = Math.min(1, elapsed2 / (stats.fireRate / gameSpeed));
+        if (coolFrac2 < 1) {
+            const arcR = 6;
+            const startA = -Math.PI / 2;
+            const endA   = startA + (Math.PI * 2 * coolFrac2);
+            ctx.strokeStyle = this.config.color;
+            ctx.globalAlpha = 0.75;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(this.x + 12, this.y + 12, arcR, startA, endA);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
         }
     }
 }
@@ -1707,6 +1725,8 @@ function checkWaveComplete() {
     try {
         const autoData = {
             gold, lives, wave, score, highScore,
+            mapIndex: selectedMapIndex,
+            difficulty: selectedDifficulty,
             towers: towers.map(t => ({
                 gx: t.gridX, gy: t.gridY, type: t.type,
                 level: t.level, kills: t.kills, totalDmg: t.totalDmg,

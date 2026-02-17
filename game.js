@@ -617,8 +617,17 @@ class Enemy {
             ctx.fillText('🛡', this.x + this.radius - 1, this.y - this.radius + 1);
         }
 
-        // Armor indicator
+        // Armor indicator + metallic ring
         if (this.armorReduce > 0) {
+            // Metallic outer ring
+            const ringGrad = ctx.createRadialGradient(this.x, this.y, this.radius, this.x, this.y, this.radius + 5);
+            ringGrad.addColorStop(0, 'rgba(176,190,197,0.9)');
+            ringGrad.addColorStop(1, 'rgba(96,125,139,0.4)');
+            ctx.strokeStyle = ringGrad;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius + 3, 0, Math.PI * 2);
+            ctx.stroke();
             ctx.font = '9px Arial';
             ctx.textAlign = 'left';
             ctx.textBaseline = 'top';
@@ -1168,6 +1177,7 @@ function killEnemy(idx) {
     checkAchievements();
     if (isBoss) unlockAchievement('boss_kill');
     if (e && e.icon === '🧬') unlockAchievement('mutant_kill');
+    if (e && e.icon === '🔩') unlockAchievement('mech_kill');
 
     // Kill milestones
     if (totalKills === 100) showBanner('🎖 100 Gegner besiegt!');
@@ -2429,6 +2439,8 @@ function saveGame() {
     if (waveInProgress) return; // only save between waves
     const data = {
         gold, lives, wave, score, highScore,
+        mapIndex: selectedMapIndex,
+        difficulty: selectedDifficulty,
         towers: towers.map(t => ({
             gx: t.gridX, gy: t.gridY, type: t.type,
             level: t.level, kills: t.kills, totalDmg: t.totalDmg,
@@ -2447,6 +2459,14 @@ function loadGame() {
         resetGame();
         // Wait one frame so resetGame completes
         requestAnimationFrame(() => {
+            // Restore map
+            if (data.mapIndex !== undefined) {
+                selectMap(data.mapIndex);
+                document.querySelectorAll('.map-btn').forEach(b => {
+                    b.classList.toggle('map-active', parseInt(b.dataset.map) === data.mapIndex);
+                });
+            }
+            if (data.difficulty) selectedDifficulty = data.difficulty;
             gold = data.gold || 200;
             lives = data.lives || 20;
             wave = data.wave || 0;
@@ -2536,6 +2556,11 @@ const ACHIEVEMENTS = [
     { id: 'poison_use',     icon: '🧪', name: 'Giftmischer',        desc: 'Poison Tower platziert' },
     { id: 'mutant_kill',    icon: '🧬', name: 'Mutation gestoppt',  desc: 'Ersten Mutanten besiegt' },
     { id: 'full_upgrade',   icon: '🚀', name: 'Power-Up!',          desc: 'Power Surge aktiviert' },
+    { id: 'mech_kill',      icon: '🔩', name: 'Knacker',            desc: 'Mech-Gegner besiegt' },
+    { id: 'synergy_3',      icon: '🔗', name: 'Synergie-Meister',   desc: '+30% Synergiebenius erreicht' },
+    { id: 'pulse_use',      icon: '🧲', name: 'Magnetisiert',        desc: 'Pulse Tower platziert' },
+    { id: 'wave_30',        icon: '🎊', name: 'Unsterblich',         desc: 'Welle 30 erreichen' },
+    { id: 'all_types',      icon: '🗼', name: 'Turm-Kollektion',     desc: 'Alle 9 Türme gebaut' },
 ];
 
 let _achUnlocked = new Set(JSON.parse(localStorage.getItem(ACH_KEY) || '[]'));
@@ -2585,6 +2610,7 @@ function processAchievementToastQueue() {
 function checkAchievements() {
     if (towers.length >= 1)    unlockAchievement('first_tower');
     if (towers.some(t => t.type === 'poison')) unlockAchievement('poison_use');
+    if (towers.some(t => t.type === 'pulse'))  unlockAchievement('pulse_use');
     if (towers.some(t => t.level >= 3)) unlockAchievement('max_tower');
     if (totalKills >= 1)       unlockAchievement('first_kill');
     if (totalKills >= 100)     unlockAchievement('kills_100');
@@ -2596,9 +2622,15 @@ function checkAchievements() {
     if (wave >= 15)            unlockAchievement('wave_15');
     if (wave >= 20)            unlockAchievement('wave_20');
     if (wave >= 25)            unlockAchievement('wave_25');
+    if (wave >= 30)            unlockAchievement('wave_30');
     if (totalGoldEarned >= 2000)  unlockAchievement('gold_2000');
     if (totalGoldEarned >= 5000)  unlockAchievement('gold_5000');
     if (Date.now() < damageBoostEnd) unlockAchievement('full_upgrade');
+    // Synergy master: any tower with +30% synergy bonus
+    if (towers.some(t => t.getSynergyBonus() >= 0.30)) unlockAchievement('synergy_3');
+    // All 9 tower types placed
+    const towerTypesUsed = new Set(towers.map(t => t.type));
+    if (towerTypesUsed.size >= 9) unlockAchievement('all_types');
 }
 
 function renderAchievementsModal() {

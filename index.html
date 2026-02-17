@@ -11,6 +11,49 @@
 <!-- Wave Complete Banner -->
 <div id="waveBanner" class="wave-banner"></div>
 
+<!-- Help Modal -->
+<div id="helpModal" class="overlay" style="display:none;">
+    <div class="overlay-box help-box">
+        <h2>🐚 Wie spielt man Tower Defense?</h2>
+        <div class="help-content">
+            <div class="help-section">
+                <strong>🎯 Ziel</strong>
+                <p>Verhindere, dass Gegner die 🏁 Ziellinie erreichen. Du hast <strong>20 Leben</strong> — jeder durchkommende Gegner kostet dich eins!</p>
+            </div>
+            <div class="help-section">
+                <strong>🗼 Türme platzieren</strong>
+                <p>Klicke einen Turm im Shop, dann klicke auf das Spielfeld. <strong>Nicht auf dem Pfad platzieren!</strong> Grüne Markierung = OK, Rot = Blockiert.</p>
+                <p>Mit <kbd>Shift</kbd> gedrückt → mehrere Türme in Folge platzieren.</p>
+            </div>
+            <div class="help-section">
+                <strong>⬆ Upgrades</strong>
+                <p>Klicke einen platzierten Turm → <strong>Info-Panel</strong> zeigt Werte. Upgrade kostet Gold, erhöht Schaden & Reichweite.</p>
+                <p>Level 2: ×1.65 Schaden | Level 3: ×2.6 Schaden (Max)</p>
+            </div>
+            <div class="help-section">
+                <strong>🎯 Ziel-Modi</strong>
+                <p>Jeder Turm hat einen Ziel-Modus: <strong>Vorne</strong> (näher am Ziel), <strong>Hinten</strong>, <strong>Stark</strong> (meiste HP), <strong>Schwach</strong>.</p>
+            </div>
+            <div class="help-section">
+                <strong>🌊 Wellen</strong>
+                <p>Drücke <strong>▶️ Welle starten</strong> oder <kbd>Enter</kbd>. Ab Welle 3 kommen 🏃 Fast-Gegner, ab Welle 5 🛡️ Tanks, alle 5 Wellen ein 💀 Boss!</p>
+            </div>
+            <div class="help-section">
+                <strong>💰 Gold-Tipps</strong>
+                <p>Gegner töten → Gold. Welle abschließen → Bonus (steigt pro Welle). Türme verkaufen → 50% Rückgabe.</p>
+            </div>
+            <div class="help-section">
+                <strong>⌨️ Shortcuts</strong>
+                <p>
+                    <kbd>Space</kbd> Pause &nbsp; <kbd>Enter</kbd> Welle starten &nbsp; <kbd>Esc</kbd> Auswahl aufheben<br>
+                    <kbd>Ctrl+S</kbd> Speichern &nbsp; <kbd>Ctrl+L</kbd> Laden
+                </p>
+            </div>
+        </div>
+        <button id="closeHelp" class="btn-primary" style="margin-top:16px;">▶️ Spielen!</button>
+    </div>
+</div>
+
 <!-- Game Over Overlay -->
 <div id="gameOverlay" class="overlay" style="display:none;">
     <div class="overlay-box">
@@ -24,7 +67,10 @@
 
     <!-- Header -->
     <div class="header">
-        <h1>🐚 Shelldon's Tower Defense</h1>
+        <div class="header-top">
+            <h1>🐚 Shelldon's Tower Defense</h1>
+            <button id="helpBtn" class="help-btn" title="Hilfe / How to play">❓</button>
+        </div>
         <div class="stats-bar">
             <div class="stat gold">
                 <span class="stat-icon">💰</span>

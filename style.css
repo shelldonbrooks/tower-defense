@@ -58,14 +58,39 @@ body {
     margin-bottom: 16px;
 }
 
+.header-top {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
 .header h1 {
     font-size: 1.9em;
     background: linear-gradient(135deg, var(--primary), var(--accent));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    margin-bottom: 12px;
     letter-spacing: -0.5px;
+}
+
+.help-btn {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: white;
+    font-size: 1em;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+
+.help-btn:hover {
+    border-color: var(--primary);
+    background: #f0f4ff;
+    transform: rotate(15deg);
 }
 
 .stats-bar {
@@ -457,6 +482,69 @@ body {
 .overlay-btn {
     font-size: 1.1em;
     padding: 12px 36px;
+}
+
+/* ================================================================
+   HELP MODAL
+   ================================================================ */
+.help-box {
+    max-width: 560px;
+    text-align: left;
+    padding: 30px 36px;
+}
+
+.help-box h2 {
+    font-size: 1.5em;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 16px;
+    text-align: center;
+}
+
+.help-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    max-height: 65vh;
+    overflow-y: auto;
+}
+
+.help-section {
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+}
+
+.help-section strong {
+    display: block;
+    color: var(--primary);
+    font-size: 0.9em;
+    margin-bottom: 4px;
+}
+
+.help-section p {
+    font-size: 0.8em;
+    color: var(--text);
+    line-height: 1.5;
+}
+
+.help-section kbd {
+    background: #e8e8e8;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-family: monospace;
+    font-size: 0.9em;
+    color: var(--text);
+}
+
+@media (max-width: 560px) {
+    .help-content {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* ================================================================

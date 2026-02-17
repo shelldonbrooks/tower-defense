@@ -292,7 +292,10 @@ class Particle {
     }
 }
 
+const MAX_PARTICLES = 300;
+
 function spawnExplosion(x, y, color, count = 12) {
+    if (particles.length > MAX_PARTICLES) return; // performance cap
     for (let i = 0; i < count; i++) {
         const angle = (Math.PI * 2 * i) / count + Math.random() * 0.6;
         const speed = 1.5 + Math.random() * 3;
@@ -808,6 +811,39 @@ function drawPath() {
     // Exit marker
     const last = PATH_WAYPOINTS[PATH_WAYPOINTS.length - 1];
     ctx.fillText('🏁', canvas.width - 15, last.y * CELL_SIZE + CELL_SIZE / 2);
+
+    // Direction arrows along the path
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.fillStyle   = 'rgba(255,255,255,0.55)';
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < PATH_WAYPOINTS.length - 1; i++) {
+        const from = PATH_WAYPOINTS[i];
+        const to   = PATH_WAYPOINTS[i + 1];
+        const segDx = (to.x - from.x) * CELL_SIZE;
+        const segDy = (to.y - from.y) * CELL_SIZE;
+        const segLen = Math.sqrt(segDx * segDx + segDy * segDy);
+        const nx = segDx / segLen;
+        const ny = segDy / segLen;
+        const steps = Math.max(1, Math.floor(segLen / (CELL_SIZE * 2)));
+        for (let s = 1; s <= steps; s++) {
+            const t = s / (steps + 1);
+            const ax = (from.x * CELL_SIZE + CELL_SIZE / 2) + segDx * t;
+            const ay = (from.y * CELL_SIZE + CELL_SIZE / 2) + segDy * t;
+            // Draw chevron arrow
+            const aw = 6, ah = 9;
+            ctx.save();
+            ctx.translate(ax, ay);
+            ctx.rotate(Math.atan2(ny, nx));
+            ctx.beginPath();
+            ctx.moveTo(ah / 2, 0);
+            ctx.lineTo(-ah / 2, -aw / 2);
+            ctx.lineTo(-ah / 4, 0);
+            ctx.lineTo(-ah / 2, aw / 2);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+    }
 }
 
 function drawHoverCell() {
@@ -1310,6 +1346,18 @@ document.getElementById('upgradeTower').addEventListener('click', () => {
 });
 
 document.getElementById('overlayBtn').addEventListener('click', resetGame);
+
+document.getElementById('helpBtn').addEventListener('click', () => {
+    gamePaused = true;
+    document.getElementById('helpModal').style.display = 'flex';
+    document.getElementById('pauseBtn').textContent = '▶ Weiter';
+});
+
+document.getElementById('closeHelp').addEventListener('click', () => {
+    document.getElementById('helpModal').style.display = 'none';
+    gamePaused = false;
+    document.getElementById('pauseBtn').textContent = '⏸ Pause';
+});
 
 // Targeting mode buttons (in tower info panel)
 document.querySelectorAll('.tm-btn').forEach(btn => {

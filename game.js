@@ -1554,6 +1554,9 @@ function resetGame() {
     const awb = document.getElementById('autoWaveBtn');
     if (awb) { awb.checked = false; autoWave = false; }
 
+    // Show difficulty screen again (but keep current difficulty as default)
+    showDifficultyScreen();
+
     if (!gameRunning) {
         gameRunning = true;
         requestAnimationFrame(gameLoop);
@@ -2026,8 +2029,42 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 
 // ================================================================
+// DIFFICULTY SELECT
+// ================================================================
+let selectedDifficulty = 'normal';
+
+function showDifficultyScreen() {
+    // Populate leaderboard preview
+    const lb = getLeaderboard();
+    const lbEl = document.getElementById('startLb');
+    if (lbEl && lb.length > 0) {
+        const top3 = lb.slice(0, 3).map((e, i) =>
+            `${['🥇','🥈','🥉'][i]} <strong>${e.score.toLocaleString()}</strong> — W${e.wave} (${e.date})`
+        ).join('<br>');
+        lbEl.innerHTML = `<strong>🏆 Bestenliste:</strong><br>${top3}`;
+    }
+    document.getElementById('difficultyOverlay').style.display = 'flex';
+}
+
+document.querySelectorAll('.diff-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const startGold  = parseInt(btn.dataset.gold);
+        const startLives = parseInt(btn.dataset.lives);
+        selectedDifficulty = btn.classList.contains('diff-easy')   ? 'easy'
+                           : btn.classList.contains('diff-hard')   ? 'hard'
+                           : 'normal';
+        gold  = startGold;
+        lives = startLives;
+        livesAtWaveStart = startLives;
+        document.getElementById('difficultyOverlay').style.display = 'none';
+        updateUI();
+    });
+});
+
+// ================================================================
 // INIT
 // ================================================================
+showDifficultyScreen();
 gameRunning = true;
 updateUI();
 resizeCanvas();

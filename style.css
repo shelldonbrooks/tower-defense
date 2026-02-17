@@ -498,6 +498,85 @@ body {
 }
 
 /* ================================================================
+   DIFFICULTY SELECT
+   ================================================================ */
+.diff-box {
+    max-width: 480px;
+    text-align: center;
+    padding: 36px 40px;
+}
+
+.diff-title {
+    font-size: 2.2em;
+    font-weight: 900;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 6px;
+}
+
+.diff-sub {
+    color: var(--text-dim);
+    font-size: 0.95em;
+    margin-bottom: 22px;
+}
+
+.diff-options {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.diff-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 16px 8px;
+    border: 3px solid var(--border);
+    border-radius: 14px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.diff-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+}
+
+.diff-easy:hover   { border-color: #4CAF50; }
+.diff-normal:hover { border-color: var(--primary); }
+.diff-hard:hover   { border-color: #F44336; }
+
+.diff-easy   { border-color: #c8e6c9; }
+.diff-normal { border-color: var(--border); }
+.diff-hard   { border-color: #ffcdd2; }
+
+.diff-icon { font-size: 2em; }
+.diff-btn strong { font-size: 1.05em; }
+.diff-btn span { font-size: 0.78em; color: var(--text-dim); }
+.diff-note { font-style: italic; }
+
+.diff-lb {
+    font-size: 0.8em;
+    color: var(--text-dim);
+    text-align: left;
+}
+
+.diff-lb strong {
+    display: block;
+    color: var(--primary);
+    margin-bottom: 4px;
+}
+
+@media (max-width: 440px) {
+    .diff-options { flex-direction: column; }
+}
+
+/* ================================================================
    HELP MODAL
    ================================================================ */
 .help-box {

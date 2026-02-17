@@ -76,6 +76,35 @@
     </div>
 </div>
 
+<!-- Difficulty Select (shown on load) -->
+<div id="difficultyOverlay" class="overlay">
+    <div class="overlay-box diff-box">
+        <div class="diff-title">🐚 Tower Defense</div>
+        <p class="diff-sub">Wähle deine Schwierigkeitsstufe</p>
+        <div class="diff-options">
+            <button class="diff-btn diff-easy" data-gold="350" data-lives="30">
+                <span class="diff-icon">🌱</span>
+                <strong>Easy</strong>
+                <span>350💰 · 30❤️</span>
+                <span class="diff-note">Entspannte Runde</span>
+            </button>
+            <button class="diff-btn diff-normal" data-gold="200" data-lives="20">
+                <span class="diff-icon">⚔️</span>
+                <strong>Normal</strong>
+                <span>200💰 · 20❤️</span>
+                <span class="diff-note">Ausgewogen</span>
+            </button>
+            <button class="diff-btn diff-hard" data-gold="120" data-lives="10">
+                <span class="diff-icon">💀</span>
+                <strong>Hard</strong>
+                <span>120💰 · 10❤️</span>
+                <span class="diff-note">Für Profis</span>
+            </button>
+        </div>
+        <div class="diff-lb" id="startLb"></div>
+    </div>
+</div>
+
 <!-- Game Over Overlay -->
 <div id="gameOverlay" class="overlay" style="display:none;">
     <div class="overlay-box">

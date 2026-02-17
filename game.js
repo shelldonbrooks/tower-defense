@@ -1372,9 +1372,14 @@ function drawBossBar() {
 // ================================================================
 // WAVE PREVIEW
 // ================================================================
+let _wavePreviewCache = { wave: -1, inProgress: null };
+
 function updateWavePreview() {
     const el = document.getElementById('wavePreview');
     if (!el) return;
+    // Only recalculate when state changes
+    if (_wavePreviewCache.wave === wave && _wavePreviewCache.inProgress === waveInProgress) return;
+    _wavePreviewCache = { wave, inProgress: waveInProgress };
 
     if (waveInProgress) {
         el.innerHTML = '<span class="wp-active">🌊 Welle läuft...</span>';
@@ -1779,9 +1784,14 @@ document.querySelectorAll('.tower-btn').forEach(btn => {
             `<div class="tt-stat"><span class="tt-stat-label">📊 DPS</span><span class="tt-stat-value">${dps}</span></div>` +
             extra;
         const r = btn.getBoundingClientRect();
-        tt.style.left = `${r.right + 8}px`;
-        tt.style.top  = `${Math.max(8, r.top - 10)}px`;
         tt.style.display = 'block';
+        tt.style.top  = `${Math.max(8, r.top - 10)}px`;
+        // Prefer right side, but flip left if would overflow
+        const ttW = tt.offsetWidth || 220;
+        const leftPos = r.right + 8;
+        tt.style.left = (leftPos + ttW < window.innerWidth - 8)
+            ? `${leftPos}px`
+            : `${Math.max(4, r.left - ttW - 8)}px`;
     });
 
     btn.addEventListener('mouseleave', () => {
@@ -1827,7 +1837,10 @@ document.getElementById('upgradeTower').addEventListener('click', () => {
 
 document.getElementById('overlayBtn').addEventListener('click', resetGame);
 
+let pausedBeforeHelp = false;
+
 document.getElementById('helpBtn').addEventListener('click', () => {
+    pausedBeforeHelp = gamePaused;
     gamePaused = true;
     document.getElementById('helpModal').style.display = 'flex';
     document.getElementById('pauseBtn').textContent = '▶ Weiter';
@@ -1835,8 +1848,8 @@ document.getElementById('helpBtn').addEventListener('click', () => {
 
 document.getElementById('closeHelp').addEventListener('click', () => {
     document.getElementById('helpModal').style.display = 'none';
-    gamePaused = false;
-    document.getElementById('pauseBtn').textContent = '⏸ Pause';
+    gamePaused = pausedBeforeHelp; // restore pre-help pause state
+    document.getElementById('pauseBtn').textContent = gamePaused ? '▶ Weiter' : '⏸ Pause';
 });
 
 // Targeting mode buttons (in tower info panel)

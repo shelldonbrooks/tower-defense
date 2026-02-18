@@ -70,6 +70,8 @@ let recentKillTimes = []; // timestamps of recent kills for combo tracking
 let comboActive = false;
 let livesLostEver = 0; // for perfect-game achievement
 let waveSplash = null; // { text, alpha } — wave start canvas splash
+let killsByType = {}; // kill distribution per enemy icon
+let milestonesTriggered = new Set(); // kill milestones already fired
 
 // ================================================================
 // AUDIO SYSTEM (Web Audio API — no external files)
@@ -557,6 +559,7 @@ class Enemy {
         this.poisonSource = null;
         this.regenDPS     = cfg.regenDPS || 0;
         this._lastTick    = 0;
+        this.raging       = false; // rage mode: <25% HP → +30% speed
     }
 
     applyPoison(dps, duration, tower) {
@@ -578,8 +581,16 @@ class Enemy {
 
     update(now) {
         if (this.slowedUntil && now > this.slowedUntil) {
-            this.speed = this.baseSpeed;
+            this.speed = this.baseSpeed * (this.raging ? 1.3 : 1.0);
             this.slowedUntil = 0;
+        }
+
+        // Rage: when HP drops below 25%, speed up (Tanks and Bosses only)
+        if ((this.isTank || this.icon === '💀' || this.isElite) &&
+            !this.raging && this.health / this.maxHealth < 0.25) {
+            this.raging = true;
+            this.speed = Math.max(this.speed, this.baseSpeed * 1.3);
+            spawnHitFlash(this.x, this.y, '#FF1744');
         }
 
         // Time-delta for DOT / regen
@@ -701,6 +712,16 @@ class Enemy {
             ctx.textAlign = 'left';
             ctx.textBaseline = 'top';
             ctx.fillText('🔩', this.x - this.radius + 1, this.y - this.radius + 1);
+        }
+
+        // Rage mode visual (red pulsing ring)
+        if (this.raging) {
+            const rage = 0.35 + Math.abs(Math.sin(Date.now() / 140)) * 0.55;
+            ctx.strokeStyle = `rgba(255,23,68,${rage.toFixed(2)})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius + 7, 0, Math.PI * 2);
+            ctx.stroke();
         }
 
         // Cryo glow
@@ -1421,6 +1442,30 @@ function killEnemy(idx) {
     score += e.scoreVal;
     totalKills++;
     totalGoldEarned += earnedGold;
+    killsByType[e.icon] = (killsByType[e.icon] || 0) + 1;
+
+    // Kill milestones
+    const MILESTONES = [
+        { kills: 250,  reward() { const b=60; gold+=b; totalGoldEarned+=b; showBanner(`🎖 250 Kills! +${b}💰 Bonus!`); updateUI(); } },
+        { kills: 750,  reward() { lives=Math.min(lives+1,30); showBanner('🏅 750 Kills! +1❤️'); updateUI(); } },
+        { kills: 1500, reward() {
+            const up = towers.filter(t=>t.level<3);
+            if (up.length) {
+                const t = up[Math.floor(Math.random()*up.length)];
+                t.level++; sfxUpgrade();
+                spawnFloatText(t.x, t.y-28, '⭐ 1500 Kills Upgrade!', '#FFD700');
+            } else {
+                gold += 100; totalGoldEarned += 100; updateUI();
+            }
+            showBanner('💫 1500 Kills! Gratis-Upgrade!');
+        }}
+    ];
+    for (const m of MILESTONES) {
+        if (totalKills >= m.kills && !milestonesTriggered.has(m.kills)) {
+            milestonesTriggered.add(m.kills);
+            setTimeout(() => m.reward(), 600);
+        }
+    }
     spawnExplosion(e.x, e.y, e.color, isBoss ? 24 : 12);
     const floatText = goldMult > 1 ? `+${earnedGold}💰×${goldMult}` : `+${earnedGold}💰`;
     spawnFloatText(e.x, e.y - 15, floatText, goldMult > 1 ? '#FFD700' : undefined);
@@ -2443,10 +2488,16 @@ function triggerGameOver() {
 
     const ol = document.getElementById('gameOverlay');
     document.getElementById('overlayTitle').textContent = '💀 Game Over!';
+    const killDistrib = Object.entries(killsByType)
+        .filter(([,c]) => c > 0)
+        .sort((a, b) => b[1] - a[1])
+        .map(([icon, count]) => `${icon}×${count}`)
+        .join(' ');
     document.getElementById('overlayMessage').innerHTML =
         `Welle <strong>${wave}</strong> &nbsp;|&nbsp; Score: <strong>${score.toLocaleString()}</strong><br>` +
-        `Zeit: ${timeStr} &nbsp;|&nbsp; 👾 ${totalKills} Kills &nbsp;|&nbsp; 💥 ${Math.floor(totalDamageDealt).toLocaleString()}<br>` +
-        (towerStats ? `<div class="go-tower-stats"><strong>Top Türme:</strong> ${towerStats}</div>` : '') +
+        `Zeit: ${timeStr} &nbsp;|&nbsp; 💀 ${totalKills} Kills &nbsp;|&nbsp; ❤️ ${livesLostEver} verloren<br>` +
+        (killDistrib ? `<div class="go-tower-stats"><strong>Kills:</strong> ${killDistrib}</div>` : '') +
+        (towerStats  ? `<div class="go-tower-stats"><strong>Top Türme:</strong> ${towerStats}</div>` : '') +
         renderLeaderboard();
     document.getElementById('overlayBtn').textContent = '🔄 Neu starten';
     ol.style.display = 'flex';
@@ -2470,6 +2521,7 @@ function resetGame() {
     enemySpeedMult = 1.0;
     recentKillTimes = []; comboActive = false; _noLeakCount = 0;
     livesLostEver = 0; waveSplash = null;
+    killsByType = {}; milestonesTriggered = new Set();
     clearTimeout(autoWaveTimer); autoWaveTimer = null;
     updateAutoWaveDisplay();
 

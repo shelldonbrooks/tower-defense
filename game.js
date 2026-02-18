@@ -660,6 +660,29 @@ class Enemy {
             ctx.fillText('🛡', this.x + this.radius - 1, this.y - this.radius + 1);
         }
 
+        // Elite pulsing aura
+        if (this.isElite) {
+            const ePulse = 0.3 + Math.abs(Math.sin(Date.now() / 300)) * 0.5;
+            ctx.strokeStyle = `rgba(183,28,28,${ePulse.toFixed(2)})`;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius + 8, 0, Math.PI * 2);
+            ctx.stroke();
+            // Rotating spikes
+            const sp = Date.now() / 600;
+            ctx.strokeStyle = `rgba(255,82,82,${(ePulse * 0.7).toFixed(2)})`;
+            ctx.lineWidth = 2;
+            for (let s = 0; s < 4; s++) {
+                const a = sp + (s * Math.PI / 2);
+                ctx.beginPath();
+                ctx.moveTo(this.x + Math.cos(a) * (this.radius + 8),
+                           this.y + Math.sin(a) * (this.radius + 8));
+                ctx.lineTo(this.x + Math.cos(a) * (this.radius + 16),
+                           this.y + Math.sin(a) * (this.radius + 16));
+                ctx.stroke();
+            }
+        }
+
         // Armor indicator + metallic ring
         if (this.armorReduce > 0) {
             // Metallic outer ring
@@ -714,10 +737,19 @@ class Enemy {
             ctx.stroke();
         }
 
-        // Stealth ghost: semi-transparent with shimmer
+        // Stealth ghost: semi-transparent with shimmer + wisp particles
         if (this.isStealthy) {
             const shimmer = 0.35 + Math.abs(Math.sin(Date.now() / 300)) * 0.25;
             ctx.globalAlpha = shimmer;
+            // Ethereal wisp particles (emitted from ghost)
+            if (particles.length < MAX_PARTICLES - 5 && Math.random() < 0.15) {
+                particles.push(new Particle(
+                    this.x + (Math.random() - 0.5) * this.radius * 2,
+                    this.y + (Math.random() - 0.5) * this.radius * 2,
+                    '#E1BEE7', (Math.random() - 0.5) * 0.5, -0.6 - Math.random() * 0.5,
+                    20 + Math.floor(Math.random() * 10), 3
+                ));
+            }
         }
 
         // Shadow
@@ -2768,6 +2800,45 @@ document.getElementById('upgradeTower').addEventListener('click', () => {
     }
 });
 
+// Upgrade preview tooltip (shows next-level stats)
+document.getElementById('upgradeTower').addEventListener('mouseenter', () => {
+    if (!selectedTower || selectedTower.level >= 3) return;
+    const t = selectedTower;
+    const curr = t.getStats();
+    t.level++;
+    const next = t.getStats();
+    t.level--;
+
+    const dmgPct  = Math.round((next.damage / curr.damage - 1) * 100);
+    const rngPct  = Math.round((next.range  / curr.range  - 1) * 100);
+    const ratePct = Math.round((curr.fireRate / next.fireRate - 1) * 100);
+
+    const tt = document.getElementById('towerTooltip');
+    tt.innerHTML = `<div class="tt-title">⬆ Level ${t.level + 1} Vorschau</div>` +
+        `<div class="tt-stat"><span class="tt-stat-label">💥 Schaden</span>` +
+            `<span class="tt-stat-value">${Math.round(curr.damage)} → <strong>${Math.round(next.damage)}</strong> ` +
+            `<span style="color:#4CAF50">+${dmgPct}%</span></span></div>` +
+        `<div class="tt-stat"><span class="tt-stat-label">📏 Reichweite</span>` +
+            `<span class="tt-stat-value">${Math.round(curr.range)} → <strong>${Math.round(next.range)}</strong> ` +
+            `<span style="color:#4CAF50">+${rngPct}%</span></span></div>` +
+        `<div class="tt-stat"><span class="tt-stat-label">🔥 Rate</span>` +
+            `<span class="tt-stat-value">${(1000/curr.fireRate).toFixed(1)} → <strong>${(1000/next.fireRate).toFixed(1)}</strong>/s ` +
+            `<span style="color:#4CAF50">+${ratePct}%</span></span></div>`;
+    const btn = document.getElementById('upgradeTower');
+    const r = btn.getBoundingClientRect();
+    tt.style.display = 'block';
+    const ttW = tt.offsetWidth || 220;
+    const leftPos = r.right + 8;
+    tt.style.top  = `${Math.max(8, r.top - 10)}px`;
+    tt.style.left = (leftPos + ttW < window.innerWidth - 8)
+        ? `${leftPos}px`
+        : `${Math.max(4, r.left - ttW - 8)}px`;
+});
+
+document.getElementById('upgradeTower').addEventListener('mouseleave', () => {
+    document.getElementById('towerTooltip').style.display = 'none';
+});
+
 document.getElementById('overlayBtn').addEventListener('click', resetGame);
 
 let pausedBeforeHelp = false;
@@ -2858,6 +2929,12 @@ document.addEventListener('keydown', e => {
     }
     if (e.key === 'Enter' && !waveInProgress) {
         document.getElementById('startWave').click();
+    }
+    // R key: quick restart (only on game over or between waves)
+    if ((e.key === 'r' || e.key === 'R') && !waveInProgress) {
+        if (document.getElementById('gameOverlay').style.display !== 'none') {
+            resetGame();
+        }
     }
 
     // Number keys 1-9,0 for tower selection

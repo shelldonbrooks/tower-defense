@@ -600,8 +600,8 @@ class Enemy {
             this.slowedUntil = 0;
         }
 
-        // Rage: when HP drops below 25%, speed up (Tanks and Bosses only)
-        if ((this.isTank || this.icon === '💀' || this.isElite) &&
+        // Rage: when HP drops below 25%, speed up (Tanks, Bosses, Elites, Titans)
+        if ((this.isTank || this.icon === '💀' || this.isElite || this.isTitan) &&
             !this.raging && this.health / this.maxHealth < 0.25) {
             this.raging = true;
             this.speed = Math.max(this.speed, this.baseSpeed * 1.3);
@@ -1635,6 +1635,7 @@ function killEnemy(idx) {
     if (e && e.icon === '🧬') unlockAchievement('mutant_kill');
     if (e && e.icon === '🔩') unlockAchievement('mech_kill');
     if (e && e.icon === '👻') unlockAchievement('ghost_kill');
+    if (e && e.isTitan) unlockAchievement('titan_kill');
 
     // Kill milestones
     if (totalKills === 100) showBanner('🎖 100 Gegner besiegt!');
@@ -2115,6 +2116,21 @@ function buildWaveRoster(waveNum) {
         });
     }
 
+    // Titan (W30+): Extreme tank with partial armor
+    if (waveNum >= 30) {
+        configs.push({
+            health: Math.floor(baseHp * 10),
+            speed:  baseSpeed * 0.28,
+            reward: Math.floor(baseReward * 8),
+            scoreVal: baseReward * 22,
+            icon: '🦾', color: '#1A237E', radius: 28,
+            isTank: false, isSlowImmune: false,
+            armorReduce: 0.40,
+            isTitan: true,
+            delay: basicCount * 1800 + 10000
+        });
+    }
+
     if (waveNum % 5 === 0) {
         configs.push({
             health: Math.floor(baseHp * 7),
@@ -2460,9 +2476,10 @@ function updateWavePreview() {
 
     const nextWave = wave + 1;
     const roster = buildWaveRoster(nextWave);
-    const counts = { normal: 0, fast: 0, tank: 0, mutant: 0, mech: 0, ghost: 0, boss: 0, swarm: 0, elite: 0 };
+    const counts = { normal: 0, fast: 0, tank: 0, mutant: 0, mech: 0, ghost: 0, boss: 0, swarm: 0, elite: 0, titan: 0 };
     for (const c of roster) {
-        if (c.isElite)            counts.elite++;
+        if (c.isTitan)            counts.titan++;
+        else if (c.isElite)       counts.elite++;
         else if (c.icon === '💀') counts.boss++;
         else if (c.icon === '🧬') counts.mutant++;
         else if (c.icon === '🔩') counts.mech++;
@@ -2482,6 +2499,7 @@ function updateWavePreview() {
     if (counts.mech)   parts.push(`<span class="wp-mech">🔩×${counts.mech}</span>`);
     if (counts.ghost)  parts.push(`<span class="wp-ghost">👻×${counts.ghost}</span>`);
     if (counts.elite)  parts.push(`<span class="wp-elite">👹 ELITE!</span>`);
+    if (counts.titan)  parts.push(`<span class="wp-titan">🦾 TITAN!</span>`);
     if (counts.boss)   parts.push(`<span class="wp-boss">💀 BOSS!</span>`);
 
     el.innerHTML = `<strong>Welle ${nextWave}:</strong> ${parts.join(' ')}`;
@@ -3460,6 +3478,7 @@ const ACHIEVEMENTS = [
     { id: 'all_maps',       icon: '🌍', name: 'Kartograph',         desc: 'Alle 5 Karten gespielt' },
     { id: 'gold_10000',     icon: '🏦', name: 'Schatzkammer',       desc: '10.000 Gold in einer Partie verdient' },
     { id: 'overdrive',      icon: '🔥', name: 'Überhitzt!',         desc: 'Laser in Overdrive-Modus gebracht' },
+    { id: 'titan_kill',     icon: '🦾', name: 'Titanenkiller',       desc: 'Einen Titan besiegt (W30+)' },
 ];
 
 let _achUnlocked = new Set(JSON.parse(localStorage.getItem(ACH_KEY) || '[]'));

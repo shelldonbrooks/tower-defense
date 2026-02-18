@@ -1112,6 +1112,12 @@ body {
     text-shadow: 0 0 6px rgba(183,28,28,0.4);
 }
 
+.wp-titan {
+    color: #1A237E;
+    font-weight: 700;
+    text-shadow: 0 0 8px rgba(26,35,126,0.5);
+}
+
 /* Stats modal */
 .stats-modal-content {
     display: flex;

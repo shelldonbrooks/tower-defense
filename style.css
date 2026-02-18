@@ -1093,3 +1093,31 @@ body {
     font-weight: 600;
     font-style: italic;
 }
+
+.wp-swarm {
+    color: #FFA000;
+    font-weight: 600;
+}
+
+.wp-elite {
+    color: #B71C1C;
+    font-weight: 700;
+    text-shadow: 0 0 6px rgba(183,28,28,0.4);
+}
+
+/* Laser tower button spans full width */
+.tower-btn-wide {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    justify-content: space-around;
+    padding: 7px 12px;
+    background: linear-gradient(135deg, #fff5f5, #fff);
+    border-color: #FF1744;
+}
+.tower-btn-wide .tb-icon { font-size: 1.4em; }
+.tower-btn-wide .tb-name { font-size: 0.78em; }
+.tower-btn-wide.selected {
+    background: linear-gradient(135deg, #ffe0e6, #fff5f5);
+    border-color: #FF1744;
+    box-shadow: 0 0 0 3px rgba(255,23,68,0.25);
+}

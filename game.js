@@ -106,6 +106,13 @@ function sfxFire(type) {
         case 'area':   _tone({ freq: 110, type: 'sawtooth', dur: 0.10, vol: 0.40, decay: 0.45, sweep: 30 }); break;
         case 'arc':    _tone({ freq: 1400, type: 'sawtooth', dur: 0.06, vol: 0.22, decay: 0.14, sweep: 400 }); break;
         case 'poison': _tone({ freq: 280,  type: 'sine',     dur: 0.14, vol: 0.18, decay: 0.22, sweep: 180 }); break;
+        case 'laser': {
+            const _lnow = Date.now();
+            if (_soundThrottle['laser'] && _lnow - _soundThrottle['laser'] < 80) return;
+            _soundThrottle['laser'] = _lnow;
+            _tone({ freq: 1800, type: 'sine', dur: 0.04, vol: 0.07, decay: 0.03, sweep: 600 });
+            break;
+        }
         case 'pulse':  {
             // Electric buzz — two tones
             _tone({ freq: 80,  type: 'square', dur: 0.06, vol: 0.35, decay: 0.15, sweep: 40 });
@@ -233,6 +240,23 @@ const ALL_MAPS = [
             {x: 1,  y: 1},
             {x: 1,  y: 13},
             {x: 20, y: 13}
+        ]
+    },
+    {
+        name: 'Labyrinth',
+        icon: '🏛',
+        desc: 'Viele Engpässe — taktisches Platzieren!',
+        waypoints: [
+            {x: 0,  y: 7},
+            {x: 4,  y: 7},
+            {x: 4,  y: 2},
+            {x: 9,  y: 2},
+            {x: 9,  y: 11},
+            {x: 14, y: 11},
+            {x: 14, y: 4},
+            {x: 18, y: 4},
+            {x: 18, y: 10},
+            {x: 20, y: 10}
         ]
     }
 ];
@@ -387,6 +411,21 @@ const TOWER_TYPES = {
         chainRange: 110,
         chainHits: 2,
         chainDmgMult: 0.65
+    },
+    laser: {
+        name: 'Laser',
+        desc: 'Dauerstrahl — Schaden steigt bei Lock-on bis 42 DPS',
+        cost: 165,
+        damage: 8,        // base DPS (instant lock)
+        maxDPS: 42,       // max DPS at full lock (2s)
+        lockRampMs: 2000, // time to reach max DPS
+        range: 155,
+        fireRate: 16,     // updates ~60fps
+        color: '#FF1744',
+        icon: '🔦',
+        isLaser: true,
+        projectileSpeed: 0,
+        projectileRadius: 0
     }
 };
 
@@ -748,6 +787,7 @@ class Tower {
         this.totalDmg  = 0;
         this.angle     = 0;   // current rotation (radians)
         this.targetMode = 'first'; // 'first' | 'last' | 'strong' | 'weak'
+        this.lockTime  = 0;   // for laser tower lock-on ramp
     }
 
     getSynergyBonus() {
@@ -789,6 +829,11 @@ class Tower {
     update(now) {
         const stats = this.getStats();
         const effectiveRate = stats.fireRate / gameSpeed;
+
+        if (this.config.isLaser) {
+            this._handleLaser(now, stats);
+            return;
+        }
 
         if (this.config.isAura) {
             // Aura/pulse tower — no targeting, pulses all enemies in range
@@ -868,6 +913,53 @@ class Tower {
         return best;
     }
 
+    _handleLaser(now, stats) {
+        const newTarget = this.findTarget(stats.range);
+        if (newTarget !== this.target) { this.lockTime = 0; }
+        this.target = newTarget;
+        this.updateAngle();
+        if (!this.target || this.target.health <= 0) {
+            this.target = null; this.lockTime = 0; return;
+        }
+        const dx = this.target.x - this.x, dy = this.target.y - this.y;
+        if (Math.sqrt(dx * dx + dy * dy) > stats.range) {
+            this.target = null; this.lockTime = 0; return;
+        }
+        const effectiveRate = stats.fireRate / gameSpeed;
+        if (now - this.lastFired < effectiveRate) return;
+
+        const dtMs = Math.min(now - this.lastFired, 200);
+        this.lockTime += dtMs;
+        const lockFrac   = Math.min(1, this.lockTime / this.config.lockRampMs);
+        const maxDPS     = this.config.maxDPS * UPGRADES[this.level - 1].dmgMult;
+        const currentDPS = stats.damage + (maxDPS - stats.damage) * lockFrac;
+        const dmg        = currentDPS * (dtMs / 1000);
+
+        sfxFire('laser');
+        this.totalDmg    += dmg;
+        totalDamageDealt += dmg;
+
+        // Laser pierces armor (energy weapon, treated as splash for armor calc)
+        if (this.target.takeDamage(dmg, true)) {
+            this.kills++;
+            const idx = enemies.indexOf(this.target);
+            if (idx !== -1) killEnemy(idx);
+            this.lockTime = 0;
+            this.target   = null;
+        } else {
+            // Spark particles on hit
+            if (particles.length < MAX_PARTICLES - 5 && Math.random() < 0.5) {
+                particles.push(new Particle(
+                    this.target.x + (Math.random() - 0.5) * 10,
+                    this.target.y + (Math.random() - 0.5) * 10,
+                    '#FF5252', (Math.random() - 0.5) * 2.5, -1 - Math.random() * 2,
+                    8, 2.5
+                ));
+            }
+        }
+        this.lastFired = now;
+    }
+
     updateAngle() {
         if (!this.target) return;
         const desired = Math.atan2(this.target.y - this.y, this.target.x - this.x);
@@ -944,6 +1036,30 @@ class Tower {
             ctx.setLineDash([]);
         }
 
+        // Laser beam (continuous fire beam) — drawn before barrel so barrel appears on top
+        if (this.config.isLaser && this.target && this.target.health > 0) {
+            const lockFrac = Math.min(1, (this.lockTime || 0) / this.config.lockRampMs);
+            const beamAlpha = 0.55 + lockFrac * 0.45;
+            const beamW = 2 + lockFrac * 4;
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(this.x, this.y);
+            ctx.lineTo(this.target.x, this.target.y);
+            // Outer glow
+            ctx.strokeStyle = `rgba(255,23,68,${(beamAlpha * 0.35).toFixed(2)})`;
+            ctx.lineWidth = beamW + 10;
+            ctx.stroke();
+            // Hot core
+            ctx.strokeStyle = `rgba(255,100,120,${beamAlpha.toFixed(2)})`;
+            ctx.lineWidth = beamW;
+            ctx.stroke();
+            // White center
+            ctx.strokeStyle = `rgba(255,255,255,${Math.min(0.95, beamAlpha + 0.1).toFixed(2)})`;
+            ctx.lineWidth = beamW * 0.35;
+            ctx.stroke();
+            ctx.restore();
+        }
+
         // Range ring when selected
         if (selectedTower === this) {
             ctx.strokeStyle = this.config.color + '55';
@@ -1005,20 +1121,37 @@ class Tower {
             ctx.fillText(`L${this.level}`, this.x + 14, this.y - 15);
         }
 
-        // Cooldown arc (small clockface in corner)
-        const elapsed2 = Date.now() - this.lastFired;
-        const coolFrac2 = Math.min(1, elapsed2 / (stats.fireRate / gameSpeed));
-        if (coolFrac2 < 1) {
-            const arcR = 6;
-            const startA = -Math.PI / 2;
-            const endA   = startA + (Math.PI * 2 * coolFrac2);
-            ctx.strokeStyle = this.config.color;
-            ctx.globalAlpha = 0.75;
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(this.x + 12, this.y + 12, arcR, startA, endA);
-            ctx.stroke();
-            ctx.globalAlpha = 1;
+        // Cooldown arc (clockface) — or lock-on progress for laser tower
+        if (this.config.isLaser) {
+            const lockFrac2 = Math.min(1, (this.lockTime || 0) / this.config.lockRampMs);
+            if (this.target && this.target.health > 0 && lockFrac2 > 0) {
+                const arcR = 6;
+                const startA = -Math.PI / 2;
+                const endA = startA + Math.PI * 2 * lockFrac2;
+                const lockColor = lockFrac2 > 0.75 ? '#FF1744' : lockFrac2 > 0.4 ? '#FF9800' : '#FFEB3B';
+                ctx.strokeStyle = lockColor;
+                ctx.globalAlpha = 0.9;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(this.x + 12, this.y + 12, arcR, startA, endA);
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+            }
+        } else {
+            const elapsed2 = Date.now() - this.lastFired;
+            const coolFrac2 = Math.min(1, elapsed2 / (stats.fireRate / gameSpeed));
+            if (coolFrac2 < 1) {
+                const arcR = 6;
+                const startA = -Math.PI / 2;
+                const endA   = startA + (Math.PI * 2 * coolFrac2);
+                ctx.strokeStyle = this.config.color;
+                ctx.globalAlpha = 0.75;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(this.x + 12, this.y + 12, arcR, startA, endA);
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+            }
         }
     }
 }
@@ -1190,6 +1323,39 @@ function killEnemy(idx) {
     const e = enemies[idx];
     if (!e) return;
     const isBoss = e.icon === '💀';
+
+    // Swarm split — spawn larvae before removing parent
+    if (e.isSwarm && !e._splitDone) {
+        e._splitDone = true;
+        for (let si = 0; si < 3; si++) {
+            const angle = (Math.PI * 2 * si) / 3 + (Math.random() * 0.5 - 0.25);
+            const larva = new Enemy({
+                health: Math.ceil(e.maxHealth * 0.28),
+                speed:  e.baseSpeed * 1.9,
+                reward: Math.max(1, Math.floor(e.reward * 0.25)),
+                scoreVal: Math.floor(e.scoreVal * 0.25),
+                icon: '🪲', color: '#8BC34A', radius: 8
+            });
+            larva.pathIndex = e.pathIndex;
+            larva.progress  = e.progress;
+            larva.x = e.x + Math.cos(angle) * 14;
+            larva.y = e.y + Math.sin(angle) * 14;
+            larva._lastTick = Date.now();
+            enemies.push(larva);
+        }
+        spawnFloatText(e.x, e.y - 22, '🪲🪲🪲 Gespalten!', '#FFC107');
+        unlockAchievement('swarm_split');
+    }
+
+    // Elite drop
+    if (e.isElite) {
+        const drop = 40 + Math.floor(wave * 4);
+        gold += drop;
+        totalGoldEarned += drop;
+        spawnFloatText(e.x, e.y - 25, `👹 +${drop}💰`, '#FF5252');
+        unlockAchievement('elite_kill');
+    }
+
     gold  += e.reward;
     score += e.scoreVal;
     totalKills++;
@@ -1213,6 +1379,7 @@ function killEnemy(idx) {
     if (isBoss) unlockAchievement('boss_kill');
     if (e && e.icon === '🧬') unlockAchievement('mutant_kill');
     if (e && e.icon === '🔩') unlockAchievement('mech_kill');
+    if (e && e.icon === '👻') unlockAchievement('ghost_kill');
 
     // Kill milestones
     if (totalKills === 100) showBanner('🎖 100 Gegner besiegt!');
@@ -1302,8 +1469,7 @@ const WAVE_EVENTS = [
                         scoreVal: 12 + wave * 2,
                         icon: '👾', color: '#E91E63', radius: 12
                     }));
-                    waveSpawnPending++;
-                    _waveRosterTotal++;
+                    _waveRosterTotal++;  // update progress bar total only
                 }, i * 400);
             }
         }
@@ -1630,6 +1796,37 @@ function buildWaveRoster(waveNum) {
         }
     }
 
+    // Swarm enemies (split into 3 larvae on death) — from wave 8
+    if (waveNum >= 8) {
+        const swarmCount = Math.min(1 + Math.floor((waveNum - 8) / 5), 3);
+        for (let i = 0; i < swarmCount; i++) {
+            configs.push({
+                health: Math.floor(baseHp * 1.8),
+                speed:  baseSpeed * 0.75,
+                reward: Math.floor(baseReward * 1.5),
+                scoreVal: baseReward * 3,
+                icon: '🐝', color: '#FFC107', radius: 14,
+                isSwarm: true,
+                delay: basicCount * 1100 + i * 2000 + 2500
+            });
+        }
+    }
+
+    // Elite miniboss (every 7th non-boss wave: 7, 14, 21, 28...)
+    if (waveNum % 7 === 0 && waveNum % 5 !== 0) {
+        configs.push({
+            health: Math.floor(baseHp * 5.5),
+            speed:  baseSpeed * 1.2,
+            reward: Math.floor(baseReward * 4.5),
+            scoreVal: baseReward * 12,
+            icon: '👹', color: '#B71C1C', radius: 21,
+            isSlowImmune: true,
+            armorReduce: 0.20,
+            isElite: true,
+            delay: basicCount * 1300 + 5500
+        });
+    }
+
     if (waveNum % 5 === 0) {
         configs.push({
             health: Math.floor(baseHp * 7),
@@ -1682,6 +1879,9 @@ function spawnWave() {
     } else if (wave % 5 === 0) {
         setTimeout(() => showBanner(`💀 BOSS WELLE ${wave}! Vorbereiten!`), 500);
         triggerShake(5);
+    } else if (wave % 7 === 0 && wave % 5 !== 0) {
+        setTimeout(() => showBanner(`👹 ELITE WELLE ${wave}! Ein besonderer Gegner naht!`), 500);
+        triggerShake(4);
     } else if (wave === 10 || wave === 20 || wave === 30 || wave === 40) {
         setTimeout(() => showBanner(`🔥 Welle ${wave} — Es wird ernst!`), 400);
     }
@@ -1912,12 +2112,14 @@ function updateWavePreview() {
 
     const nextWave = wave + 1;
     const roster = buildWaveRoster(nextWave);
-    const counts = { normal: 0, fast: 0, tank: 0, mutant: 0, mech: 0, ghost: 0, boss: 0 };
+    const counts = { normal: 0, fast: 0, tank: 0, mutant: 0, mech: 0, ghost: 0, boss: 0, swarm: 0, elite: 0 };
     for (const c of roster) {
-        if (c.icon === '💀')      counts.boss++;
+        if (c.isElite)            counts.elite++;
+        else if (c.icon === '💀') counts.boss++;
         else if (c.icon === '🧬') counts.mutant++;
         else if (c.icon === '🔩') counts.mech++;
         else if (c.icon === '👻') counts.ghost++;
+        else if (c.isSwarm)       counts.swarm++;
         else if (c.isTank)        counts.tank++;
         else if (c.isFast)        counts.fast++;
         else                      counts.normal++;
@@ -1927,9 +2129,11 @@ function updateWavePreview() {
     if (counts.normal) parts.push(`<span>👾×${counts.normal}</span>`);
     if (counts.fast)   parts.push(`<span>🏃×${counts.fast}</span>`);
     if (counts.tank)   parts.push(`<span>🛡️×${counts.tank}</span>`);
+    if (counts.swarm)  parts.push(`<span class="wp-swarm">🐝×${counts.swarm}</span>`);
     if (counts.mutant) parts.push(`<span class="wp-mutant">🧬×${counts.mutant}</span>`);
     if (counts.mech)   parts.push(`<span class="wp-mech">🔩×${counts.mech}</span>`);
     if (counts.ghost)  parts.push(`<span class="wp-ghost">👻×${counts.ghost}</span>`);
+    if (counts.elite)  parts.push(`<span class="wp-elite">👹 ELITE!</span>`);
     if (counts.boss)   parts.push(`<span class="wp-boss">💀 BOSS!</span>`);
 
     el.innerHTML = `<strong>Welle ${nextWave}:</strong> ${parts.join(' ')}`;
@@ -1993,7 +2197,13 @@ function updateTowerPanel() {
     document.getElementById('towerInfoName').textContent =
         `${t.config.icon} ${t.config.name} ${lvlNames[t.level - 1] || '★★★'}`;
 
-    const dps = (s.damage * (1000 / s.fireRate)).toFixed(1);
+    let dps;
+    if (t.config.isLaser) {
+        const maxDPSstat = (t.config.maxDPS || 42) * UPGRADES[t.level - 1].dmgMult;
+        dps = `${s.damage.toFixed(0)}→${maxDPSstat.toFixed(0)}`;
+    } else {
+        dps = (s.damage * (1000 / s.fireRate)).toFixed(1);
+    }
     const chainNote = t.config.chainHits ? ` ×${t.config.chainHits + 1}` : '';
     const poisonNote = t.config.poisonDPS
         ? `<span>🧪 ${t.config.poisonDPS}/s DoT</span>`
@@ -2328,12 +2538,15 @@ document.querySelectorAll('.tower-btn').forEach(btn => {
         const type = btn.dataset.type;
         const cfg = TOWER_TYPES[type];
         if (!cfg) return;
-        const dps = (cfg.damage * 1000 / cfg.fireRate).toFixed(1);
-        const extra = cfg.isAura         ? `<div class="tt-stat"><span class="tt-stat-label">🧲 Typ</span><span class="tt-stat-value">Aura — trifft ALLE</span></div>` :
-                      cfg.splashRadius  ? `<div class="tt-stat"><span class="tt-stat-label">💥 Splash</span><span class="tt-stat-value">${cfg.splashRadius}px</span></div>` :
-                      cfg.slowAmount    ? `<div class="tt-stat"><span class="tt-stat-label">🧊 Slow</span><span class="tt-stat-value">${Math.round((1-cfg.slowAmount)*100)}% für ${cfg.slowDuration/1000}s</span></div>` :
-                      cfg.chainHits     ? `<div class="tt-stat"><span class="tt-stat-label">⚡ Kette</span><span class="tt-stat-value">${cfg.chainHits} Bounces</span></div>` :
-                      cfg.poisonDPS     ? `<div class="tt-stat"><span class="tt-stat-label">🧪 DoT</span><span class="tt-stat-value">${cfg.poisonDPS}/s für ${cfg.poisonDuration/1000}s</span></div>` : '';
+        const dps = cfg.isLaser
+            ? `${cfg.damage}→${cfg.maxDPS} DPS`
+            : (cfg.damage * 1000 / cfg.fireRate).toFixed(1);
+        const extra = cfg.isLaser      ? `<div class="tt-stat"><span class="tt-stat-label">🔴 Strahl</span><span class="tt-stat-value">Rüstung ignoriert, Lock-on 2s</span></div>` :
+                      cfg.isAura       ? `<div class="tt-stat"><span class="tt-stat-label">🧲 Typ</span><span class="tt-stat-value">Aura — trifft ALLE</span></div>` :
+                      cfg.splashRadius ? `<div class="tt-stat"><span class="tt-stat-label">💥 Splash</span><span class="tt-stat-value">${cfg.splashRadius}px</span></div>` :
+                      cfg.slowAmount   ? `<div class="tt-stat"><span class="tt-stat-label">🧊 Slow</span><span class="tt-stat-value">${Math.round((1-cfg.slowAmount)*100)}% für ${cfg.slowDuration/1000}s</span></div>` :
+                      cfg.chainHits    ? `<div class="tt-stat"><span class="tt-stat-label">⚡ Kette</span><span class="tt-stat-value">${cfg.chainHits} Bounces</span></div>` :
+                      cfg.poisonDPS    ? `<div class="tt-stat"><span class="tt-stat-label">🧪 DoT</span><span class="tt-stat-value">${cfg.poisonDPS}/s für ${cfg.poisonDuration/1000}s</span></div>` : '';
         const tt = document.getElementById('towerTooltip');
         tt.innerHTML = `<div class="tt-title">${cfg.icon} ${cfg.name}</div>` +
             `<div class="tt-desc">${cfg.desc}</div>` +
@@ -2476,9 +2689,9 @@ document.addEventListener('keydown', e => {
         document.getElementById('startWave').click();
     }
 
-    // Number keys 1-9 for tower selection
-    const towerKeys = ['1','2','3','4','5','6','7','8','9'];
-    const towerOrder = ['basic','heavy','fast','slow','sniper','area','arc','poison','pulse'];
+    // Number keys 1-9,0 for tower selection
+    const towerKeys = ['1','2','3','4','5','6','7','8','9','0'];
+    const towerOrder = ['basic','heavy','fast','slow','sniper','area','arc','poison','pulse','laser'];
     const ki = towerKeys.indexOf(e.key);
     if (ki !== -1) {
         const type = towerOrder[ki];
@@ -2635,6 +2848,10 @@ const ACHIEVEMENTS = [
     { id: 'pulse_use',      icon: '🧲', name: 'Magnetisiert',        desc: 'Pulse Tower platziert' },
     { id: 'wave_30',        icon: '🎊', name: 'Unsterblich',         desc: 'Welle 30 erreichen' },
     { id: 'all_types',      icon: '🗼', name: 'Turm-Kollektion',     desc: 'Alle 9 Türme gebaut' },
+    { id: 'elite_kill',     icon: '👹', name: 'Elite-Besieger',      desc: 'Ersten Elite-Miniboss besiegt' },
+    { id: 'laser_use',      icon: '🔦', name: 'Lasershow',           desc: 'Laser Tower platziert' },
+    { id: 'swarm_split',    icon: '🐝', name: 'Schwarmtöter',        desc: 'Schwarm in Larven aufgespalten' },
+    { id: 'ghost_kill',     icon: '👻', name: 'Geisterjäger',        desc: 'Unsichtbaren Geist besiegt' },
 ];
 
 let _achUnlocked = new Set(JSON.parse(localStorage.getItem(ACH_KEY) || '[]'));
@@ -2685,6 +2902,7 @@ function checkAchievements() {
     if (towers.length >= 1)    unlockAchievement('first_tower');
     if (towers.some(t => t.type === 'poison')) unlockAchievement('poison_use');
     if (towers.some(t => t.type === 'pulse'))  unlockAchievement('pulse_use');
+    if (towers.some(t => t.type === 'laser'))  unlockAchievement('laser_use');
     if (towers.some(t => t.level >= 3)) unlockAchievement('max_tower');
     if (totalKills >= 1)       unlockAchievement('first_kill');
     if (totalKills >= 100)     unlockAchievement('kills_100');
@@ -2702,9 +2920,9 @@ function checkAchievements() {
     if (Date.now() < damageBoostEnd) unlockAchievement('full_upgrade');
     // Synergy master: any tower with +30% synergy bonus
     if (towers.some(t => t.getSynergyBonus() >= 0.30)) unlockAchievement('synergy_3');
-    // All 9 tower types placed
+    // All 10 tower types placed
     const towerTypesUsed = new Set(towers.map(t => t.type));
-    if (towerTypesUsed.size >= 9) unlockAchievement('all_types');
+    if (towerTypesUsed.size >= 10) unlockAchievement('all_types');
 }
 
 function renderAchievementsModal() {

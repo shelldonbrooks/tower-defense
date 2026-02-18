@@ -1041,9 +1041,9 @@ class Tower {
     fire(stats) {
         if (!this.target) return;
         sfxFire(this.type);
-        projectiles.push(new Projectile(
+        const spawnProj = (target) => projectiles.push(new Projectile(
             this.x, this.y,
-            this.target,
+            target,
             stats.damage,
             this.config.projectileSpeed * gameSpeed,
             this.config.color,
@@ -1059,6 +1059,15 @@ class Tower {
             this.config.poisonDPS      || 0,
             this.config.poisonDuration || 0
         ));
+        spawnProj(this.target);
+        // Fast L3: fire second shot at a different target (closest non-primary enemy)
+        if (this.type === 'fast' && this.level >= 3) {
+            const secondary = enemies
+                .filter(e => e !== this.target && !e.isStealthy || this.canTargetStealthy())
+                .filter(e => Math.hypot(e.x - this.x, e.y - this.y) <= stats.range)
+                .sort((a, b) => b.getPathProgress() - a.getPathProgress())[0];
+            if (secondary) spawnProj(secondary);
+        }
     }
 
     draw() {
@@ -1310,10 +1319,32 @@ class Projectile {
             if (idx !== -1) {
                 spawnHitFlash(this.target.x, this.target.y, this.color);
                 if (this.slowAmt && this.slowDur) {
-                    this.target.applySlowEffect(this.slowAmt, this.slowDur);
+                    // Cryo L3: 15% chance to fully freeze for 0.7s instead of slow
+                    if (this.tower && this.tower.level >= 3 && Math.random() < 0.15 &&
+                        !this.target.isSlowImmune) {
+                        this.target.applySlowEffect(0.02, 700); // near-zero speed = freeze
+                        spawnHitFlash(this.target.x, this.target.y, '#FFFFFF');
+                        spawnExplosion(this.target.x, this.target.y, '#B3E5FC', 6);
+                    } else {
+                        this.target.applySlowEffect(this.slowAmt, this.slowDur);
+                    }
                 }
                 if (this.poisonDPS && this.poisonDuration) {
                     this.target.applyPoison(this.poisonDPS, this.poisonDuration, this.tower);
+                    // Poison L3: chain to nearest unhit enemy within 90px
+                    if (this.tower && this.tower.level >= 3) {
+                        const near = enemies
+                            .filter(e => e !== this.target && e.poisonDPS === 0)
+                            .sort((a, b) =>
+                                Math.hypot(a.x - this.target.x, a.y - this.target.y) -
+                                Math.hypot(b.x - this.target.x, b.y - this.target.y)
+                            )[0];
+                        if (near && Math.hypot(near.x - this.target.x, near.y - this.target.y) < 90) {
+                            near.applyPoison(this.poisonDPS * 0.6, this.poisonDuration * 0.7, this.tower);
+                            spawnLightning(this.target.x, this.target.y, near.x, near.y);
+                            spawnHitFlash(near.x, near.y, '#76FF03');
+                        }
+                    }
                 }
                 if (this.tower) this.tower.totalDmg += this.damage;
                 totalDamageDealt += this.damage;

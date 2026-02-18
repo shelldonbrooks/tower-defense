@@ -266,6 +266,7 @@ const ALL_MAPS = [
 
 let selectedMapIndex = 0;
 let PATH_WAYPOINTS = ALL_MAPS[0].waypoints;
+let enemySpeedMult = 1.0; // nightmare difficulty multiplier
 let pathCells = new Set();
 
 function computePathCells() {
@@ -837,12 +838,22 @@ class Tower {
         return Math.min(adj * 0.10, 0.30);
     }
 
+    getVeteranBonus() {
+        // Passive damage bonus for high-kill towers
+        if (this.kills >= 200) return 1.18;
+        if (this.kills >= 100) return 1.12;
+        if (this.kills >= 50)  return 1.07;
+        if (this.kills >= 20)  return 1.03;
+        return 1.0;
+    }
+
     getStats() {
         const u    = UPGRADES[this.level - 1];
         const dmgBoost = (Date.now() < damageBoostEnd) ? damageBoostMult : 1.0;
         const synergy  = 1.0 + this.getSynergyBonus();
+        const veteran  = this.getVeteranBonus();
         return {
-            damage:   this.config.damage   * u.dmgMult * dmgBoost * synergy,
+            damage:   this.config.damage   * u.dmgMult * dmgBoost * synergy * veteran,
             range:    this.config.range    * u.rangeMult,
             fireRate: this.config.fireRate * u.rateMult
         };
@@ -1154,6 +1165,16 @@ class Tower {
             ctx.textAlign = 'right';
             ctx.textBaseline = 'top';
             ctx.fillText(`L${this.level}`, this.x + 14, this.y - 15);
+        }
+
+        // Veteran star badge (bottom-left corner)
+        const vetBonus = this.getVeteranBonus();
+        if (vetBonus > 1.0) {
+            const stars = this.kills >= 200 ? '⭐⭐' : this.kills >= 100 ? '⭐' : '✦';
+            ctx.font = '9px Arial';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(stars, this.x - 15, this.y + 16);
         }
 
         // Cooldown arc (clockface) — or lock-on progress for laser tower
@@ -1774,7 +1795,7 @@ function buildWaveRoster(waveNum) {
     // Diminishing scaling after wave 20 to prevent impossible difficulty
     const scaledW   = waveNum <= 20 ? waveNum : 20 + Math.sqrt(waveNum - 20) * 2.5;
     const baseHp    = Math.floor(28 + scaledW * 14);
-    const baseSpeed = Math.min(0.85 + scaledW * 0.065, 3.2); // cap speed at 3.2
+    const baseSpeed = Math.min(0.85 + scaledW * 0.065, 3.2) * enemySpeedMult; // cap speed at 3.2
     const baseReward = Math.floor(8 + scaledW * 2);
     const basicCount = Math.min(6 + waveNum * 2, 30); // cap at 30 basics
 
@@ -1928,8 +1949,8 @@ function spawnWave() {
     livesAtWaveStart = lives;
     sfxWaveStart();
 
-    // Random wave events (every 3 waves starting at wave 3, skip boss waves)
-    if (wave >= 3 && wave % 5 !== 0 && wave % 3 === 0) {
+    // Random wave events (every 3 waves starting at wave 3, skip boss waves, skip nightmare)
+    if (wave >= 3 && wave % 5 !== 0 && wave % 3 === 0 && selectedDifficulty !== 'nightmare') {
         setTimeout(() => triggerWaveEvent(), 1200);
     }
 
@@ -2351,13 +2372,17 @@ function updateTowerPanel() {
     const synergyNote = synergyBonus > 0
         ? `<span title="Synergy: +${Math.round(synergyBonus*100)}% dmg">🔗 +${Math.round(synergyBonus*100)}% Syn</span>`
         : '';
+    const vetBonus = t.getVeteranBonus();
+    const vetNote = vetBonus > 1.0
+        ? `<span title="Veteran: +${Math.round((vetBonus-1)*100)}% dmg (${t.kills} Kills)">✦ +${Math.round((vetBonus-1)*100)}% Vet</span>`
+        : '';
     document.getElementById('towerInfoStats').innerHTML =
         `<span>💥 ${Math.round(s.damage)}${chainNote}</span>` +
         `<span>📏 ${Math.round(s.range)}</span>` +
         `<span>🔥 ${(1000 / s.fireRate).toFixed(1)}/s</span>` +
         `<span>📊 ${dps} DPS</span>` +
         poisonNote + auraNote +
-        synergyNote +
+        synergyNote + vetNote +
         `<span>🎯 ${t.kills} kills</span>` +
         `<span>💢 ${Math.floor(t.totalDmg).toLocaleString()}</span>`;
 
@@ -2434,6 +2459,7 @@ function resetGame() {
     gameSpeed = 1; autoWaveCountdown = 0; screenFlash = 0; shakeAmount = 0;
     damageBoostMult = 1.0; damageBoostEnd = 0; prevBoostActive = false;
     killGoldMult = 1.0; killGoldEnd = 0; prevGoldActive = false;
+    enemySpeedMult = 1.0;
     recentKillTimes = []; comboActive = false; _noLeakCount = 0;
     clearTimeout(autoWaveTimer); autoWaveTimer = null;
     updateAutoWaveDisplay();
@@ -2544,6 +2570,19 @@ function gameLoop(timestamp) {
             prevBoostActive = false;
             showBanner('⚡ Power Surge abgelaufen!');
         }
+        // Coin rain particles during Goldschauer
+        if (goldActive && particles.length < MAX_PARTICLES - 10 && Math.random() < 0.35) {
+            particles.push(new Particle(
+                Math.random() * canvas.width,
+                -5,
+                '#FFD700',
+                (Math.random() - 0.5) * 1.5,
+                1.5 + Math.random() * 2,
+                30 + Math.floor(Math.random() * 20),
+                4
+            ));
+        }
+
         if (goldActive) {
             const remG = Math.ceil((killGoldEnd - Date.now()) / 1000);
             const alphaG = remG < 4 ? 0.7 + Math.sin(Date.now() / 180) * 0.3 : 0.9;
@@ -3039,7 +3078,7 @@ function getLeaderboard() {
 function addToLeaderboard(scr, wv) {
     const lb = getLeaderboard();
     const mapIcon = ['🐍','⚡','🌀'][selectedMapIndex] || '🐍';
-    const diffIcon = { easy: '🌱', normal: '⚔️', hard: '💀' }[selectedDifficulty] || '⚔️';
+    const diffIcon = { easy: '🌱', normal: '⚔️', hard: '💀', nightmare: '☠️' }[selectedDifficulty] || '⚔️';
     lb.push({
         score: scr, wave: wv,
         date: new Date().toLocaleDateString('de-DE'),
@@ -3100,6 +3139,8 @@ const ACHIEVEMENTS = [
     { id: 'laser_use',      icon: '🔦', name: 'Lasershow',           desc: 'Laser Tower platziert' },
     { id: 'swarm_split',    icon: '🐝', name: 'Schwarmtöter',        desc: 'Schwarm in Larven aufgespalten' },
     { id: 'ghost_kill',     icon: '👻', name: 'Geisterjäger',        desc: 'Unsichtbaren Geist besiegt' },
+    { id: 'veteran_tower',  icon: '✦',  name: 'Veteran',             desc: 'Turm erreicht 50 Kills' },
+    { id: 'nightmare_win',  icon: '☠️', name: 'Albtraum-Bezwinger', desc: 'Welle 15 auf Nightmare überleben' },
 ];
 
 let _achUnlocked = new Set(JSON.parse(localStorage.getItem(ACH_KEY) || '[]'));
@@ -3163,6 +3204,8 @@ function checkAchievements() {
     if (wave >= 20)            unlockAchievement('wave_20');
     if (wave >= 25)            unlockAchievement('wave_25');
     if (wave >= 30)            unlockAchievement('wave_30');
+    if (towers.some(t => t.kills >= 50)) unlockAchievement('veteran_tower');
+    if (wave >= 15 && selectedDifficulty === 'nightmare') unlockAchievement('nightmare_win');
     if (totalGoldEarned >= 2000)  unlockAchievement('gold_2000');
     if (totalGoldEarned >= 5000)  unlockAchievement('gold_5000');
     if (Date.now() < damageBoostEnd) unlockAchievement('full_upgrade');
@@ -3235,9 +3278,11 @@ document.querySelectorAll('.diff-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const startGold  = parseInt(btn.dataset.gold);
         const startLives = parseInt(btn.dataset.lives);
-        selectedDifficulty = btn.classList.contains('diff-easy')   ? 'easy'
-                           : btn.classList.contains('diff-hard')   ? 'hard'
+        selectedDifficulty = btn.classList.contains('diff-easy')      ? 'easy'
+                           : btn.classList.contains('diff-hard')      ? 'hard'
+                           : btn.classList.contains('diff-nightmare') ? 'nightmare'
                            : 'normal';
+        enemySpeedMult = selectedDifficulty === 'nightmare' ? 1.2 : 1.0;
         gold  = startGold;
         lives = startLives;
         livesAtWaveStart = startLives;

@@ -547,13 +547,20 @@ body {
     box-shadow: 0 6px 20px rgba(0,0,0,0.15);
 }
 
-.diff-easy:hover   { border-color: #4CAF50; }
-.diff-normal:hover { border-color: var(--primary); }
-.diff-hard:hover   { border-color: #F44336; }
+.diff-easy:hover      { border-color: #4CAF50; }
+.diff-normal:hover    { border-color: var(--primary); }
+.diff-hard:hover      { border-color: #F44336; }
+.diff-nightmare:hover { border-color: #212121; box-shadow: 0 6px 20px rgba(0,0,0,0.4); }
 
-.diff-easy   { border-color: #c8e6c9; }
-.diff-normal { border-color: var(--border); }
-.diff-hard   { border-color: #ffcdd2; }
+.diff-easy      { border-color: #c8e6c9; }
+.diff-normal    { border-color: var(--border); }
+.diff-hard      { border-color: #ffcdd2; }
+.diff-nightmare {
+    border-color: #424242;
+    background: linear-gradient(135deg, #1a1a1a, #2d2d2d);
+    color: #eee;
+}
+.diff-nightmare .diff-note { color: #FF5252; }
 
 .diff-icon { font-size: 2em; }
 .diff-btn strong { font-size: 1.05em; }

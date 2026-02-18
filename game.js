@@ -63,6 +63,9 @@ let screenFlash = 0; // white flash intensity (0-1)
 let damageBoostMult = 1.0;
 let damageBoostEnd  = 0; // timestamp when surge ends
 let prevBoostActive = false;
+let killGoldMult    = 1.0;
+let killGoldEnd     = 0;  // double-gold event timer
+let prevGoldActive  = false;
 let recentKillTimes = []; // timestamps of recent kills for combo tracking
 let comboActive = false;
 
@@ -1343,6 +1346,7 @@ function killEnemy(idx) {
             larva._lastTick = Date.now();
             enemies.push(larva);
         }
+        _waveRosterTotal += 3; // keep progress bar from going backwards
         spawnFloatText(e.x, e.y - 22, '🪲🪲🪲 Gespalten!', '#FFC107');
         unlockAchievement('swarm_split');
     }
@@ -1356,12 +1360,15 @@ function killEnemy(idx) {
         unlockAchievement('elite_kill');
     }
 
-    gold  += e.reward;
+    const goldMult = (Date.now() < killGoldEnd) ? killGoldMult : 1;
+    const earnedGold = Math.floor(e.reward * goldMult);
+    gold  += earnedGold;
     score += e.scoreVal;
     totalKills++;
-    totalGoldEarned += e.reward;
+    totalGoldEarned += earnedGold;
     spawnExplosion(e.x, e.y, e.color, isBoss ? 24 : 12);
-    spawnFloatText(e.x, e.y - 15, `+${e.reward}💰`);
+    const floatText = goldMult > 1 ? `+${earnedGold}💰×${goldMult}` : `+${earnedGold}💰`;
+    spawnFloatText(e.x, e.y - 15, floatText, goldMult > 1 ? '#FFD700' : undefined);
     sfxKill(isBoss);
     if (isBoss) {
         triggerShake(14);
@@ -1451,6 +1458,39 @@ const WAVE_EVENTS = [
                 spawnFloatText(canvas.width/2, 80, `+${bonus}💰 (max Leben!)`, '#FFD700');
                 updateUI();
             }
+        }
+    },
+    {
+        id: 'gold_shower',
+        name: '🌟 Goldschauer!',
+        desc: '2× Gold aus Kills für 15s',
+        apply: () => {
+            killGoldMult = 2;
+            killGoldEnd  = Date.now() + 15000;
+            prevGoldActive = false;
+            spawnFloatText(canvas.width / 2, canvas.height / 2 - 30, '🌟 Goldschauer! 2×', '#FFD700');
+        }
+    },
+    {
+        id: 'free_upgrade',
+        name: '⬆ Gratis-Upgrade!',
+        desc: 'Zufälliger Turm wird kostenlos verbessert',
+        apply: () => {
+            const upgradeable = towers.filter(t => t.level < 3);
+            if (upgradeable.length === 0) {
+                // No towers to upgrade — give gold instead
+                const bonus = 60;
+                gold += bonus; totalGoldEarned += bonus;
+                spawnFloatText(canvas.width / 2, 80, `+${bonus}💰 (alle Türme max!)`, '#FFD700');
+                updateUI();
+                return;
+            }
+            const t = upgradeable[Math.floor(Math.random() * upgradeable.length)];
+            t.level++;
+            sfxUpgrade();
+            spawnFloatText(t.x, t.y - 28, `⬆ Gratis L${t.level}!`, '#4CAF50');
+            checkAchievements();
+            updateUI();
         }
     },
     {
@@ -2057,6 +2097,64 @@ function drawBossBar() {
 }
 
 // ================================================================
+// ELITE HP BAR (rendered at top of canvas during elite waves)
+// ================================================================
+function drawEliteBar() {
+    const elite = enemies.find(e => e.isElite);
+    if (!elite) return;
+
+    const hasBoss = enemies.some(e => e.icon === '💀');
+    const barW = canvas.width * 0.42;
+    const barH = 16;
+    const barX = (canvas.width - barW) / 2;
+    const barY = hasBoss ? 36 : 8;
+    const hRatio = elite.health / elite.maxHealth;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.60)';
+    ctx.beginPath();
+    ctx.roundRect(barX - 48, barY - 4, barW + 56, barH + 8, 8);
+    ctx.fill();
+
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, barW, barH, 3);
+    ctx.fill();
+
+    const grad = ctx.createLinearGradient(barX, 0, barX + barW * hRatio, 0);
+    grad.addColorStop(0, '#B71C1C');
+    grad.addColorStop(1, '#FF5252');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, barW * hRatio, barH, 3);
+    ctx.fill();
+
+    ctx.font = 'bold 11px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'white';
+    ctx.fillText(`👹 ELITE  ${Math.ceil(elite.health).toLocaleString()} / ${elite.maxHealth.toLocaleString()}`,
+                 canvas.width / 2, barY + barH / 2);
+}
+
+// ================================================================
+// DANGER VIGNETTE (pulsing red when lives ≤ 3)
+// ================================================================
+function drawDangerOverlay() {
+    if (lives > 3 || !gameRunning) return;
+    const t = Date.now() / 500;
+    const maxAlpha = 0.06 + (4 - lives) * 0.06; // stronger with fewer lives
+    const pulse = maxAlpha * (0.5 + Math.abs(Math.sin(t)) * 0.5);
+    const grad = ctx.createRadialGradient(
+        canvas.width / 2, canvas.height / 2, canvas.height * 0.2,
+        canvas.width / 2, canvas.height / 2, canvas.height
+    );
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(1, `rgba(200,0,0,${pulse.toFixed(3)})`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+// ================================================================
 // WAVE PROGRESS BAR
 // ================================================================
 function drawWaveProgress() {
@@ -2297,6 +2395,7 @@ function resetGame() {
     waveSpawnPending = 0; lastTimestamp = 0; hoverCell = null;
     gameSpeed = 1; autoWaveCountdown = 0; screenFlash = 0; shakeAmount = 0;
     damageBoostMult = 1.0; damageBoostEnd = 0; prevBoostActive = false;
+    killGoldMult = 1.0; killGoldEnd = 0; prevGoldActive = false;
     recentKillTimes = []; comboActive = false; _noLeakCount = 0;
     clearTimeout(autoWaveTimer); autoWaveTimer = null;
     updateAutoWaveDisplay();
@@ -2373,32 +2472,58 @@ function gameLoop(timestamp) {
         updateTextParticles();
         ctx.restore(); // end shake transform
 
-        // Boss HP bar (drawn after ctx.restore so it doesn't shake)
+        // Boss / Elite HP bars (drawn after ctx.restore so they don't shake)
         drawBossBar();
+        drawEliteBar();
+
+        // Danger vignette (low lives warning)
+        drawDangerOverlay();
 
         // Wave progress bar
         drawWaveProgress();
 
         // Surge timer HUD
         const boostActive = Date.now() < damageBoostEnd;
+        const goldActive  = Date.now() < killGoldEnd;
+        let hudY = canvas.height - 32;
         if (boostActive) {
             const rem = Math.ceil((damageBoostEnd - Date.now()) / 1000);
             const alpha = rem < 5 ? 0.7 + Math.sin(Date.now() / 200) * 0.3 : 0.9;
             ctx.globalAlpha = alpha;
             ctx.fillStyle = 'rgba(0,0,0,0.55)';
             ctx.beginPath();
-            ctx.roundRect(canvas.width / 2 - 90, canvas.height - 32, 180, 24, 8);
+            ctx.roundRect(canvas.width / 2 - 95, hudY, 190, 24, 8);
             ctx.fill();
             ctx.fillStyle = '#FFD700';
             ctx.font = 'bold 13px Arial';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(`⚡ POWER SURGE: ${rem}s`, canvas.width / 2, canvas.height - 20);
+            ctx.fillText(`⚡ POWER SURGE: ${rem}s`, canvas.width / 2, hudY + 12);
             ctx.globalAlpha = 1;
             prevBoostActive = true;
+            hudY -= 28;
         } else if (prevBoostActive) {
             prevBoostActive = false;
             showBanner('⚡ Power Surge abgelaufen!');
+        }
+        if (goldActive) {
+            const remG = Math.ceil((killGoldEnd - Date.now()) / 1000);
+            const alphaG = remG < 4 ? 0.7 + Math.sin(Date.now() / 180) * 0.3 : 0.9;
+            ctx.globalAlpha = alphaG;
+            ctx.fillStyle = 'rgba(0,0,0,0.55)';
+            ctx.beginPath();
+            ctx.roundRect(canvas.width / 2 - 95, hudY, 190, 24, 8);
+            ctx.fill();
+            ctx.fillStyle = '#FFD700';
+            ctx.font = 'bold 13px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`🌟 GOLDSCHAUER ×2: ${remG}s`, canvas.width / 2, hudY + 12);
+            ctx.globalAlpha = 1;
+            prevGoldActive = true;
+        } else if (prevGoldActive) {
+            prevGoldActive = false;
+            showBanner('🌟 Goldschauer abgelaufen!');
         }
 
         // Screen flash (boss kill / special events)

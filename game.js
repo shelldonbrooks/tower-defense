@@ -847,6 +847,7 @@ class Tower {
         this.angle     = 0;   // current rotation (radians)
         this.targetMode = 'first'; // 'first' | 'last' | 'strong' | 'weak'
         this.lockTime  = 0;   // for laser tower lock-on ramp
+        this.shotCount = 0;   // for L3 crit/overclock tracking
     }
 
     getSynergyBonus() {
@@ -933,24 +934,34 @@ class Tower {
     }
 
     fireAura(stats) {
+        // Pulse L3: every 5th pulse = Overclock (2× damage, bigger visual)
+        this.shotCount++;
+        const isOverclock = this.level >= 3 && this.shotCount % 5 === 0;
+        const pulseDmg = stats.damage * (isOverclock ? 2 : 1);
+
         let hitCount = 0;
         for (let i = enemies.length - 1; i >= 0; i--) {
             const e = enemies[i];
             const dx = e.x - this.x, dy = e.y - this.y;
             if (Math.sqrt(dx * dx + dy * dy) > stats.range) continue;
             if (e.isStealthy && !this.canTargetStealthy()) continue;
-            spawnHitFlash(e.x, e.y, this.config.color);
-            this.totalDmg += stats.damage;
-            totalDamageDealt += stats.damage;
+            spawnHitFlash(e.x, e.y, isOverclock ? '#FFFFFF' : this.config.color);
+            this.totalDmg += pulseDmg;
+            totalDamageDealt += pulseDmg;
             hitCount++;
-            if (e.takeDamage(stats.damage, true)) {  // pulse ignores armor (area effect)
+            if (e.takeDamage(pulseDmg, true)) {  // pulse ignores armor (area effect)
                 this.kills++;
                 killEnemy(i);
             }
         }
         if (hitCount > 0) {
             sfxFire('pulse');
-            spawnAuraPulse(this.x, this.y, stats.range, this.config.color);
+            const pulseColor = isOverclock ? '#FFFFFF' : this.config.color;
+            spawnAuraPulse(this.x, this.y, stats.range, pulseColor);
+            if (isOverclock) {
+                spawnAuraPulse(this.x, this.y, stats.range * 0.6, '#81D4FA');
+                spawnFloatText(this.x, this.y - 25, '⚡ OVERCLOCK!', '#81D4FA');
+            }
         }
         return hitCount;
     }
@@ -1064,10 +1075,26 @@ class Tower {
             ? (this.config.chainHits || 0) + 2
             : (this.config.chainHits || 0);
 
+        this.shotCount++;
         spawnProj(this.target);
-        // Patch the last projectile's chainHits for Arc L3
+
+        // Post-creation patches on the last projectile
+        const lastProj = projectiles[projectiles.length - 1];
+        // Arc L3: +2 chain bounces
         if (this.type === 'arc' && this.level >= 3) {
-            projectiles[projectiles.length - 1].chainHits = chainHitsOverride;
+            lastProj.chainHits = chainHitsOverride;
+        }
+        // Sniper L3: every 4th shot = CRIT (3× damage)
+        if (this.type === 'sniper' && this.level >= 3 && this.shotCount % 4 === 0 && this.target) {
+            lastProj.damage *= 3;
+            spawnFloatText(this.target.x, this.target.y - 30, '💥 KRIT!', '#CE93D8');
+            if (particles.length < MAX_PARTICLES - 8) {
+                for (let _i = 0; _i < 7; _i++) {
+                    const _a = Math.random() * Math.PI * 2;
+                    particles.push(new Particle(this.target.x, this.target.y,
+                        '#CE93D8', Math.cos(_a) * 3, Math.sin(_a) * 3, 15, 3));
+                }
+            }
         }
 
         // Fast L3: fire second shot at a different target (closest non-primary enemy)

@@ -524,17 +524,21 @@ body {
 
 .diff-options {
     display: flex;
-    gap: 12px;
+    flex-wrap: wrap;
+    gap: 10px;
     margin-bottom: 16px;
+    justify-content: center;
 }
 
 .diff-btn {
-    flex: 1;
+    flex: 1 1 120px;
+    min-width: 110px;
+    max-width: 160px;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 4px;
-    padding: 16px 8px;
+    padding: 14px 8px;
     border: 3px solid var(--border);
     border-radius: 14px;
     background: white;
@@ -577,8 +581,10 @@ body {
 
 .diff-maps {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     margin-bottom: 14px;
+    justify-content: center;
 }
 
 .map-btn {

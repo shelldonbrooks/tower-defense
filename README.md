@@ -51,11 +51,12 @@ High-kill towers gain passive damage bonuses:
 | 🧬 | Mutant | W10+ | Regenerates 1.5% HP/s (countered by Poison) |
 | 🔩 | Mech | W12+ | 40% armor (reduced by splash/poison/laser) |
 | 👻 | Ghost | W15+ | Invisible — only Sniper or L3 towers can target |
-| 👹 | Elite | W7,14,21… | Miniboss, 5.5× HP, bonus gold drop, rages at <25% HP |
+| 👹 | Elite | W7,14,21… | Miniboss, 5.5× HP, bonus gold drop |
 | 💀 | Boss | W5,10,15… | 7× HP, immune to slow, random power-up drop |
+| 🦾 | Titan | W30+ | 10× HP, 40% armor, deadly rage at <25% HP |
 | 🪲 | Larva | (spawned) | Fast offspring of Swarm |
 
-**Rage Mode**: Tanks, Bosses, and Elites speed up +30% when below 25% HP!
+**Rage Mode**: Tanks, Bosses, Elites, and Titans speed up +30% when below 25% HP!
 
 ---
 
@@ -138,7 +139,7 @@ Each tower can be set to target: **Vorne** (first), **Hinten** (last), **Stark**
 
 ---
 
-## 🏅 Achievements (31 total)
+## 🏅 Achievements (38 total)
 
 Achievements for kills, waves, tower use, special kills, combos, and more. View them via the 🏅 button.
 
@@ -174,4 +175,5 @@ Achievements for kills, waves, tower use, special kills, combos, and more. View 
 | v4.0 | 2026-02-18 | Laser tower, Swarm enemy, Elite, 4th map |
 | v4.7 | 2026-02-18 | L3 specials (6 towers), veteran system |
 | v5.0 | 2026-02-18 | Complete L3 set (all 10 towers), Nightmare difficulty |
-| v5.1 | 2026-02-18 | 5th map (Schlucht), overdrive visual |
+| v5.5 | 2026-02-18 | 5 maps, stats modal, no-leak streak, danger vignette |
+| v5.9 | 2026-02-18 | Titan enemy, wave 35/50 milestones, 38 achievements |

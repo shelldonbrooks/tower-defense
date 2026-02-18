@@ -2207,7 +2207,35 @@ function spawnWave() {
     }
 
     // Wave milestones
-    if (wave === 25) {
+    if (wave === 50) {
+        setTimeout(() => {
+            showBanner('🌠 WELLE 50 — GOTT-MODUS! +2000💰');
+            gold += 2000; totalGoldEarned += 2000;
+            screenFlash = 1.0;
+            triggerShake(20);
+            for (let i = 0; i < 12; i++) {
+                setTimeout(() => spawnExplosion(
+                    50 + Math.random() * 700, 50 + Math.random() * 500,
+                    ['#FF6B6B','#FFD700','#4CAF50','#2196F3','#E040FB','#FFFFFF'][Math.floor(Math.random()*6)], 16
+                ), i * 60);
+            }
+            updateUI();
+        }, 800);
+    } else if (wave === 35) {
+        setTimeout(() => {
+            showBanner('🌙 Welle 35 — Unsterblich! +800💰');
+            gold += 800; totalGoldEarned += 800;
+            screenFlash = 0.5;
+            triggerShake(10);
+            for (let i = 0; i < 7; i++) {
+                setTimeout(() => spawnExplosion(
+                    100 + Math.random() * 600, 100 + Math.random() * 400,
+                    ['#FF6B6B','#FFD700','#2196F3'][Math.floor(Math.random()*3)], 12
+                ), i * 70);
+            }
+            updateUI();
+        }, 800);
+    } else if (wave === 25) {
         setTimeout(() => {
             showBanner('🎉 Welle 25 — Du bist ein Meister! +500💰');
             gold += 500; totalGoldEarned += 500;
@@ -3562,6 +3590,8 @@ const ACHIEVEMENTS = [
     { id: 'gold_10000',     icon: '🏦', name: 'Schatzkammer',       desc: '10.000 Gold in einer Partie verdient' },
     { id: 'overdrive',      icon: '🔥', name: 'Überhitzt!',         desc: 'Laser in Overdrive-Modus gebracht' },
     { id: 'titan_kill',     icon: '🦾', name: 'Titanenkiller',       desc: 'Einen Titan besiegt (W30+)' },
+    { id: 'wave_35',        icon: '🌙', name: 'Unsterblich II',      desc: 'Welle 35 erreichen' },
+    { id: 'wave_50',        icon: '🌠', name: 'Gott-Modus',          desc: 'Welle 50 erreichen!' },
 ];
 
 let _achUnlocked = new Set(JSON.parse(localStorage.getItem(ACH_KEY) || '[]'));
@@ -3638,6 +3668,8 @@ function checkAchievements() {
     if (wave >= 15 && selectedDifficulty === 'nightmare') unlockAchievement('nightmare_win');
     if (wave >= 25 && livesLostEver === 0) unlockAchievement('perfect_game');
     if (totalGoldEarned >= 10000) unlockAchievement('gold_10000');
+    if (wave >= 35) unlockAchievement('wave_35');
+    if (wave >= 50) unlockAchievement('wave_50');
     if (totalGoldEarned >= 2000)  unlockAchievement('gold_2000');
     if (totalGoldEarned >= 5000)  unlockAchievement('gold_5000');
     if (Date.now() < damageBoostEnd) unlockAchievement('full_upgrade');

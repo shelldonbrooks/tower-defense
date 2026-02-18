@@ -3093,6 +3093,22 @@ document.getElementById('upgradeTower').addEventListener('mouseenter', () => {
     const rngPct  = Math.round((next.range  / curr.range  - 1) * 100);
     const ratePct = Math.round((curr.fireRate / next.fireRate - 1) * 100);
 
+    const L3_SPECIALS = {
+        basic:  '🎯 Burst: jeder 3. Schuss = 3 Ziele',
+        heavy:  '💣 Schockwelle: äußerer Ring 30% Dmg',
+        fast:   '⚡ Doppelschuss: 2. Ziel in Reichweite',
+        slow:   '🧊 15% Freeze-Chance (kurz eingefroren)',
+        sniper: '🔭 Krit: jeder 4. Schuss = 3× Schaden',
+        area:   '💥 Napalm: Splash-Bereich brennt weiter',
+        arc:    '🌩 +2 Ketten (5 Ziele total)',
+        poison: '🧪 Kette: Gift auf nächsten Gegner',
+        pulse:  '🧲 Overclock: jeder 5. Puls = 2×',
+        laser:  '🔦 Overdrive: nach 1s voll → 2× DPS'
+    };
+    const specialNote = t.level + 1 >= 3 && L3_SPECIALS[t.type]
+        ? `<div class="tt-stat" style="color:#FF9800;font-style:italic;"><span class="tt-stat-label">✦ L3 Spezial</span><span class="tt-stat-value">${L3_SPECIALS[t.type]}</span></div>`
+        : '';
+
     const tt = document.getElementById('towerTooltip');
     tt.innerHTML = `<div class="tt-title">⬆ Level ${t.level + 1} Vorschau</div>` +
         `<div class="tt-stat"><span class="tt-stat-label">💥 Schaden</span>` +
@@ -3103,7 +3119,8 @@ document.getElementById('upgradeTower').addEventListener('mouseenter', () => {
             `<span style="color:#4CAF50">+${rngPct}%</span></span></div>` +
         `<div class="tt-stat"><span class="tt-stat-label">🔥 Rate</span>` +
             `<span class="tt-stat-value">${(1000/curr.fireRate).toFixed(1)} → <strong>${(1000/next.fireRate).toFixed(1)}</strong>/s ` +
-            `<span style="color:#4CAF50">+${ratePct}%</span></span></div>`;
+            `<span style="color:#4CAF50">+${ratePct}%</span></span></div>` +
+        specialNote;
     const btn = document.getElementById('upgradeTower');
     const r = btn.getBoundingClientRect();
     tt.style.display = 'block';

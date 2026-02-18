@@ -1059,7 +1059,17 @@ class Tower {
             this.config.poisonDPS      || 0,
             this.config.poisonDuration || 0
         ));
+        // Arc L3: 2 extra chain bounces (total 4 instead of 2)
+        const chainHitsOverride = this.type === 'arc' && this.level >= 3
+            ? (this.config.chainHits || 0) + 2
+            : (this.config.chainHits || 0);
+
         spawnProj(this.target);
+        // Patch the last projectile's chainHits for Arc L3
+        if (this.type === 'arc' && this.level >= 3) {
+            projectiles[projectiles.length - 1].chainHits = chainHitsOverride;
+        }
+
         // Fast L3: fire second shot at a different target (closest non-primary enemy)
         if (this.type === 'fast' && this.level >= 3) {
             const secondary = enemies
@@ -1304,15 +1314,42 @@ class Projectile {
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const e = enemies[i];
                 const dx = e.x - this.target.x, dy = e.y - this.target.y;
-                if (Math.sqrt(dx * dx + dy * dy) <= this.splashR) {
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist <= this.splashR) {
                     spawnHitFlash(e.x, e.y, this.color);
                     if (this.tower) this.tower.totalDmg += this.damage;
                     totalDamageDealt += this.damage;
+                    // Bomber L3: Napalm pool — apply poison DOT in splash radius
+                    if (this.tower && this.tower.type === 'area' && this.tower.level >= 3) {
+                        e.applyPoison(14, 7000, this.tower);
+                    }
                     if (e.takeDamage(this.damage, true)) {  // splash = ignores armor
                         if (this.tower) this.tower.kills++;
                         killEnemy(i);
                     }
                 }
+            }
+            // Heavy L3: Cluster shockwave — outer ring at 1.75× radius, 30% damage
+            if (this.tower && this.tower.type === 'heavy' && this.tower.level >= 3) {
+                const outerR = this.splashR * 1.75;
+                let shockCount = 0;
+                for (let i = enemies.length - 1; i >= 0; i--) {
+                    const e = enemies[i];
+                    const dx2 = e.x - this.target.x, dy2 = e.y - this.target.y;
+                    const dist2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+                    if (dist2 > this.splashR && dist2 <= outerR) {
+                        const fragDmg = this.damage * 0.3;
+                        this.tower.totalDmg += fragDmg;
+                        totalDamageDealt += fragDmg;
+                        spawnHitFlash(e.x, e.y, '#FF6E40');
+                        shockCount++;
+                        if (e.takeDamage(fragDmg, true)) {
+                            this.tower.kills++;
+                            killEnemy(i);
+                        }
+                    }
+                }
+                if (shockCount > 0) spawnExplosion(this.target.x, this.target.y, '#FF6E40', 8);
             }
         } else {
             const idx = enemies.indexOf(this.target);
@@ -3260,7 +3297,7 @@ const ACHIEVEMENTS = [
     { id: 'synergy_3',      icon: '🔗', name: 'Synergie-Meister',   desc: '+30% Synergiebenius erreicht' },
     { id: 'pulse_use',      icon: '🧲', name: 'Magnetisiert',        desc: 'Pulse Tower platziert' },
     { id: 'wave_30',        icon: '🎊', name: 'Unsterblich',         desc: 'Welle 30 erreichen' },
-    { id: 'all_types',      icon: '🗼', name: 'Turm-Kollektion',     desc: 'Alle 9 Türme gebaut' },
+    { id: 'all_types',      icon: '🗼', name: 'Turm-Kollektion',     desc: 'Alle 10 Türme gebaut' },
     { id: 'elite_kill',     icon: '👹', name: 'Elite-Besieger',      desc: 'Ersten Elite-Miniboss besiegt' },
     { id: 'laser_use',      icon: '🔦', name: 'Lasershow',           desc: 'Laser Tower platziert' },
     { id: 'swarm_split',    icon: '🐝', name: 'Schwarmtöter',        desc: 'Schwarm in Larven aufgespalten' },

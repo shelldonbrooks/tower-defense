@@ -68,6 +68,8 @@ let killGoldEnd     = 0;  // double-gold event timer
 let prevGoldActive  = false;
 let recentKillTimes = []; // timestamps of recent kills for combo tracking
 let comboActive = false;
+let livesLostEver = 0; // for perfect-game achievement
+let waveSplash = null; // { text, alpha } — wave start canvas splash
 
 // ================================================================
 // AUDIO SYSTEM (Web Audio API — no external files)
@@ -1948,6 +1950,7 @@ function spawnWave() {
     waveSpawnPending = 0;
     livesAtWaveStart = lives;
     sfxWaveStart();
+    waveSplash = { text: `🌊 Welle ${wave}`, alpha: 1.2 }; // alpha > 1 for a hold delay
 
     // Random wave events (every 3 waves starting at wave 3, skip boss waves, skip nightmare)
     if (wave >= 3 && wave % 5 !== 0 && wave % 3 === 0 && selectedDifficulty !== 'nightmare') {
@@ -2309,6 +2312,11 @@ function updateUI() {
     document.getElementById('highscore').textContent = highScore;
     const mapNameEl = document.getElementById('mapName');
     if (mapNameEl) mapNameEl.textContent = ALL_MAPS[selectedMapIndex].name;
+    // Update difficulty icon
+    const diffIcons = { easy: '🌱', normal: '⚔️', hard: '💀', nightmare: '☠️' };
+    const diffEl = document.getElementById('diffIcon');
+    if (diffEl) diffEl.textContent = diffIcons[selectedDifficulty] || '⚔️';
+
     // Update game timer
     const elapsed = Math.floor((Date.now() - gameStartTime) / 1000);
     const mins = Math.floor(elapsed / 60);
@@ -2461,6 +2469,7 @@ function resetGame() {
     killGoldMult = 1.0; killGoldEnd = 0; prevGoldActive = false;
     enemySpeedMult = 1.0;
     recentKillTimes = []; comboActive = false; _noLeakCount = 0;
+    livesLostEver = 0; waveSplash = null;
     clearTimeout(autoWaveTimer); autoWaveTimer = null;
     updateAutoWaveDisplay();
 
@@ -2502,6 +2511,17 @@ function gameLoop(timestamp) {
         towers.forEach(t => { t.update(now); t.draw(); });
         drawSynergyLines();
 
+        // Pulsing selection ring for selected tower
+        if (selectedTower) {
+            const sp = 0.5 + Math.sin(Date.now() / 260) * 0.5;
+            ctx.strokeStyle = `rgba(255,255,255,${(0.6 + sp * 0.4).toFixed(2)})`;
+            ctx.lineWidth = 2 + sp;
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.arc(selectedTower.x, selectedTower.y, 22 + sp * 3, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
         for (let i = enemies.length - 1; i >= 0; i--) {
             const e = enemies[i];
             const reachedExit = e.update(now);
@@ -2511,6 +2531,7 @@ function gameLoop(timestamp) {
                 killEnemy(i);
             } else if (reachedExit) {
                 lives--;
+                livesLostEver++;
                 spawnExplosion(e.x, e.y, '#F44336', 8);
                 sfxLifeLost();
                 triggerShake(8);
@@ -2534,6 +2555,25 @@ function gameLoop(timestamp) {
         }
 
         updateTextParticles();
+
+        // Wave start splash text
+        if (waveSplash && waveSplash.alpha > 0) {
+            const visAlpha = Math.min(1, waveSplash.alpha);
+            const scale = 1.0 + (1.0 - visAlpha) * 0.4;
+            ctx.save();
+            ctx.globalAlpha = visAlpha * 0.9;
+            ctx.font = `bold ${Math.floor(44 * scale)}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+            ctx.lineWidth = 4;
+            ctx.strokeText(waveSplash.text, canvas.width / 2, canvas.height / 2);
+            ctx.fillStyle = 'white';
+            ctx.fillText(waveSplash.text, canvas.width / 2, canvas.height / 2);
+            ctx.restore();
+            waveSplash.alpha -= 0.028;
+        }
+
         ctx.restore(); // end shake transform
 
         // Boss / Elite HP bars (drawn after ctx.restore so they don't shake)
@@ -3032,7 +3072,10 @@ function loadGame() {
                     b.classList.toggle('map-active', parseInt(b.dataset.map) === data.mapIndex);
                 });
             }
-            if (data.difficulty) selectedDifficulty = data.difficulty;
+            if (data.difficulty) {
+                selectedDifficulty = data.difficulty;
+                enemySpeedMult = selectedDifficulty === 'nightmare' ? 1.2 : 1.0;
+            }
             gold = data.gold || 200;
             lives = data.lives || 20;
             wave = data.wave || 0;
@@ -3141,6 +3184,7 @@ const ACHIEVEMENTS = [
     { id: 'ghost_kill',     icon: '👻', name: 'Geisterjäger',        desc: 'Unsichtbaren Geist besiegt' },
     { id: 'veteran_tower',  icon: '✦',  name: 'Veteran',             desc: 'Turm erreicht 50 Kills' },
     { id: 'nightmare_win',  icon: '☠️', name: 'Albtraum-Bezwinger', desc: 'Welle 15 auf Nightmare überleben' },
+    { id: 'perfect_game',   icon: '💎', name: 'Unberührt!',         desc: 'Welle 25 erreichen ohne einen Treffer' },
 ];
 
 let _achUnlocked = new Set(JSON.parse(localStorage.getItem(ACH_KEY) || '[]'));
@@ -3206,6 +3250,7 @@ function checkAchievements() {
     if (wave >= 30)            unlockAchievement('wave_30');
     if (towers.some(t => t.kills >= 50)) unlockAchievement('veteran_tower');
     if (wave >= 15 && selectedDifficulty === 'nightmare') unlockAchievement('nightmare_win');
+    if (wave >= 25 && livesLostEver === 0) unlockAchievement('perfect_game');
     if (totalGoldEarned >= 2000)  unlockAchievement('gold_2000');
     if (totalGoldEarned >= 5000)  unlockAchievement('gold_5000');
     if (Date.now() < damageBoostEnd) unlockAchievement('full_upgrade');

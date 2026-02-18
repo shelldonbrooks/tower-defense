@@ -265,6 +265,21 @@ const ALL_MAPS = [
             {x: 18, y: 10},
             {x: 20, y: 10}
         ]
+    },
+    {
+        name: 'Schlucht',
+        icon: '🏔',
+        desc: 'Tiefer Umweg — der längste Weg!',
+        waypoints: [
+            {x: 0,  y: 3},
+            {x: 8,  y: 3},
+            {x: 8,  y: 12},
+            {x: 3,  y: 12},
+            {x: 3,  y: 8},
+            {x: 12, y: 8},
+            {x: 12, y: 3},
+            {x: 20, y: 3}
+        ]
     }
 ];
 
@@ -1197,10 +1212,15 @@ class Tower {
             ctx.lineWidth = beamW * 0.35;
             ctx.stroke();
             ctx.restore();
-            // Overdrive indicator
-            if (odFrac > 0) {
-                spawnFloatText && odFrac >= 1 && this.shotCount % 60 === 0 &&
-                    spawnFloatText(this.x, this.y - 32, '🔥 OVERDRIVE!', '#FF9800');
+            // Overdrive indicator (pulsing text when overdrive is active)
+            if (odFrac >= 1) {
+                ctx.save();
+                ctx.globalAlpha = 0.7 + Math.abs(Math.sin(Date.now() / 300)) * 0.3;
+                ctx.font = 'bold 10px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#FF9800';
+                ctx.fillText('🔥OD', this.x, this.y - 26);
+                ctx.restore();
             }
         }
 
@@ -3296,7 +3316,7 @@ function getLeaderboard() {
 
 function addToLeaderboard(scr, wv) {
     const lb = getLeaderboard();
-    const mapIcon = ['🐍','⚡','🌀'][selectedMapIndex] || '🐍';
+    const mapIcon = ['🐍','⚡','🌀','🏛','🏔'][selectedMapIndex] || '🐍';
     const diffIcon = { easy: '🌱', normal: '⚔️', hard: '💀', nightmare: '☠️' }[selectedDifficulty] || '⚔️';
     lb.push({
         score: scr, wave: wv,

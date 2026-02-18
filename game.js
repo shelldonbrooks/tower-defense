@@ -1034,6 +1034,10 @@ class Tower {
             this.overdriveTime = 0;
         }
         const overdriveFrac = Math.min(1, Math.max(0, (this.overdriveTime - 1000) / 1000));
+        if (overdriveFrac >= 1 && this._overdriveAchDone !== true) {
+            this._overdriveAchDone = true;
+            unlockAchievement('overdrive');
+        }
         const maxDPS     = this.config.maxDPS * UPGRADES[this.level - 1].dmgMult * (1 + overdriveFrac);
         const currentDPS = stats.damage + (maxDPS - stats.damage) * lockFrac;
         const dmg        = currentDPS * (dtMs / 1000);
@@ -1123,7 +1127,7 @@ class Tower {
         // Fast L3: fire second shot at a different target (closest non-primary enemy)
         if (this.type === 'fast' && this.level >= 3) {
             const secondary = enemies
-                .filter(e => e !== this.target && !e.isStealthy || this.canTargetStealthy())
+                .filter(e => e !== this.target && (!e.isStealthy || this.canTargetStealthy()))
                 .filter(e => Math.hypot(e.x - this.x, e.y - this.y) <= stats.range)
                 .sort((a, b) => b.getPathProgress() - a.getPathProgress())[0];
             if (secondary) spawnProj(secondary);
@@ -2140,6 +2144,7 @@ function spawnWave() {
     livesAtWaveStart = lives;
     sfxWaveStart();
     waveSplash = { text: `🌊 Welle ${wave}`, alpha: 1.2 }; // alpha > 1 for a hold delay
+    markMapPlayed(); // track maps for achievement
 
     // Random wave events (every 3 waves starting at wave 3, skip boss waves, skip nightmare)
     if (wave >= 3 && wave % 5 !== 0 && wave % 3 === 0 && selectedDifficulty !== 'nightmare') {
@@ -3381,6 +3386,9 @@ const ACHIEVEMENTS = [
     { id: 'veteran_tower',  icon: '✦',  name: 'Veteran',             desc: 'Turm erreicht 50 Kills' },
     { id: 'nightmare_win',  icon: '☠️', name: 'Albtraum-Bezwinger', desc: 'Welle 15 auf Nightmare überleben' },
     { id: 'perfect_game',   icon: '💎', name: 'Unberührt!',         desc: 'Welle 25 erreichen ohne einen Treffer' },
+    { id: 'all_maps',       icon: '🌍', name: 'Kartograph',         desc: 'Alle 5 Karten gespielt' },
+    { id: 'gold_10000',     icon: '🏦', name: 'Schatzkammer',       desc: '10.000 Gold in einer Partie verdient' },
+    { id: 'overdrive',      icon: '🔥', name: 'Überhitzt!',         desc: 'Laser in Overdrive-Modus gebracht' },
 ];
 
 let _achUnlocked = new Set(JSON.parse(localStorage.getItem(ACH_KEY) || '[]'));
@@ -3388,6 +3396,15 @@ let _noLeakCount = 0; // consecutive waves without lives lost
 
 function saveAchievements() {
     localStorage.setItem(ACH_KEY, JSON.stringify([..._achUnlocked]));
+}
+
+const MAP_PLAYED_KEY = 'tdMapsPlayed';
+
+function markMapPlayed() {
+    const played = new Set(JSON.parse(localStorage.getItem(MAP_PLAYED_KEY) || '[]'));
+    played.add(selectedMapIndex);
+    localStorage.setItem(MAP_PLAYED_KEY, JSON.stringify([...played]));
+    if (played.size >= 5) unlockAchievement('all_maps');
 }
 
 function unlockAchievement(id) {
@@ -3447,6 +3464,7 @@ function checkAchievements() {
     if (towers.some(t => t.kills >= 50)) unlockAchievement('veteran_tower');
     if (wave >= 15 && selectedDifficulty === 'nightmare') unlockAchievement('nightmare_win');
     if (wave >= 25 && livesLostEver === 0) unlockAchievement('perfect_game');
+    if (totalGoldEarned >= 10000) unlockAchievement('gold_10000');
     if (totalGoldEarned >= 2000)  unlockAchievement('gold_2000');
     if (totalGoldEarned >= 5000)  unlockAchievement('gold_5000');
     if (Date.now() < damageBoostEnd) unlockAchievement('full_upgrade');

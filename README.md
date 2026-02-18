@@ -139,9 +139,11 @@ Each tower can be set to target: **Vorne** (first), **Hinten** (last), **Stark**
 
 ---
 
-## 🏅 Achievements (38 total)
+## 🏅 Achievements (39 total)
 
 Achievements for kills, waves, tower use, special kills, combos, and more. View them via the 🏅 button.
+
+Notable achievements include: Titan Killer (W30+), All Maps Explored, Gott-Modus (W50), Overdrive, Luftüberlegenheit (airstrike).
 
 ---
 
@@ -163,6 +165,27 @@ Achievements for kills, waves, tower use, special kills, combos, and more. View 
 
 ---
 
+## ⚡ Special Abilities
+
+| Ability | Cost | Effect |
+|---------|------|--------|
+| 💣 Luftschlag | 200g/charge | 400 AOE damage in 80px radius, 3 charges per game |
+
+**Trigger**: Click the red "Luftschlag" button → crosshair mode → click target on canvas. Press Esc to cancel.
+
+## 🎯 Focus Target
+
+Click any enemy on the canvas to mark it with a red crosshair. All towers in **"Vorne"** targeting mode will prioritize that enemy. Click again to deselect, or start a new wave to clear.
+
+## ⚡ Active Buffs (Wave Events)
+
+| Buff | Duration | HUD Color |
+|------|----------|-----------|
+| ⚡ Power Surge | 10-30s | Gold |
+| 🌟 Goldschauer | 15s | Gold |
+| 📡 Radar | 20s | Cyan |
+| 🔨 Rüstungsbruch | 12s | Orange |
+
 ## 🔧 Development History
 
 | Version | Date | Highlights |
@@ -176,4 +199,6 @@ Achievements for kills, waves, tower use, special kills, combos, and more. View 
 | v4.7 | 2026-02-18 | L3 specials (6 towers), veteran system |
 | v5.0 | 2026-02-18 | Complete L3 set (all 10 towers), Nightmare difficulty |
 | v5.5 | 2026-02-18 | 5 maps, stats modal, no-leak streak, danger vignette |
-| v5.9 | 2026-02-18 | Titan enemy, wave 35/50 milestones, 38 achievements |
+| v5.9 | 2026-02-18 | Titan enemy (🦾), wave 35/50 milestones, 39 achievements |
+| v6.1 | 2026-02-18 | Focus Target mechanic, 9 wave events, Last Stand bonus |
+| v6.6 | 2026-02-18 | 💣 Airstrike ability, radar/armor-break events, enemies counter |

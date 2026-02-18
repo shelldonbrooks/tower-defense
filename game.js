@@ -73,6 +73,10 @@ let waveSplash = null; // { text, alpha } — wave start canvas splash
 let killsByType = {}; // kill distribution per enemy icon
 let milestonesTriggered = new Set(); // kill milestones already fired
 let focusedEnemy = null; // player-marked focus target for towers
+let radarActive = false;   // wave event: ghosts are visible
+let radarEnd    = 0;
+let armorBreakActive = false; // wave event: armor ignored
+let armorBreakEnd    = 0;
 
 // ================================================================
 // AUDIO SYSTEM (Web Audio API — no external files)
@@ -858,8 +862,8 @@ class Enemy {
     }
 
     takeDamage(dmg, isSplash = false) {
-        // Armor reduces non-splash damage
-        const effective = this.armorReduce > 0 && !isSplash
+        // Armor reduces non-splash damage (unless armor break event is active)
+        const effective = this.armorReduce > 0 && !isSplash && !armorBreakActive
             ? dmg * (1 - this.armorReduce)
             : dmg;
         this.health -= effective;
@@ -1011,7 +1015,7 @@ class Tower {
     }
 
     canTargetStealthy() {
-        return this.type === 'sniper' || this.level >= 3;
+        return this.type === 'sniper' || this.level >= 3 || radarActive;
     }
 
     findTarget(range) {
@@ -1805,6 +1809,26 @@ const WAVE_EVENTS = [
             spawnFloatText(t.x, t.y - 28, `⬆ Gratis L${t.level}!`, '#4CAF50');
             checkAchievements();
             updateUI();
+        }
+    },
+    {
+        id: 'radar',
+        name: '📡 Radar aktiv!',
+        desc: 'Geister für 20s sichtbar!',
+        apply: () => {
+            radarActive = true;
+            radarEnd    = Date.now() + 20000;
+            spawnFloatText(canvas.width / 2, canvas.height / 2 - 20, '📡 Radar! Geister sichtbar!', '#00BCD4');
+        }
+    },
+    {
+        id: 'armor_break',
+        name: '🔨 Rüstungsbruch!',
+        desc: 'Rüstung ignoriert für 12s',
+        apply: () => {
+            armorBreakActive = true;
+            armorBreakEnd    = Date.now() + 12000;
+            spawnFloatText(canvas.width / 2, canvas.height / 2 - 20, '🔨 Rüstungsbruch!', '#FF5722');
         }
     },
     {
@@ -2830,6 +2854,8 @@ function resetGame() {
     gameSpeed = 1; autoWaveCountdown = 0; screenFlash = 0; shakeAmount = 0;
     damageBoostMult = 1.0; damageBoostEnd = 0; prevBoostActive = false;
     killGoldMult = 1.0; killGoldEnd = 0; prevGoldActive = false;
+    radarActive = false; radarEnd = 0;
+    armorBreakActive = false; armorBreakEnd = 0;
     enemySpeedMult = 1.0;
     recentKillTimes = []; comboActive = false; _noLeakCount = 0;
     livesLostEver = 0; waveSplash = null;
@@ -3006,6 +3032,46 @@ function gameLoop(timestamp) {
         } else if (prevGoldActive) {
             prevGoldActive = false;
             showBanner('🌟 Goldschauer abgelaufen!');
+        }
+
+        // Radar active indicator
+        if (radarActive && Date.now() < radarEnd) {
+            const remR = Math.ceil((radarEnd - Date.now()) / 1000);
+            ctx.globalAlpha = 0.9;
+            ctx.fillStyle = 'rgba(0,0,0,0.55)';
+            ctx.beginPath();
+            ctx.roundRect(canvas.width / 2 - 95, hudY, 190, 24, 8);
+            ctx.fill();
+            ctx.fillStyle = '#00BCD4';
+            ctx.font = 'bold 13px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`📡 RADAR: ${remR}s`, canvas.width / 2, hudY + 12);
+            ctx.globalAlpha = 1;
+            hudY -= 28;
+        } else if (radarActive) {
+            radarActive = false;
+            showBanner('📡 Radar deaktiviert!');
+        }
+
+        // Armor break active indicator
+        if (armorBreakActive && Date.now() < armorBreakEnd) {
+            const remAB = Math.ceil((armorBreakEnd - Date.now()) / 1000);
+            ctx.globalAlpha = 0.9;
+            ctx.fillStyle = 'rgba(0,0,0,0.55)';
+            ctx.beginPath();
+            ctx.roundRect(canvas.width / 2 - 95, hudY, 190, 24, 8);
+            ctx.fill();
+            ctx.fillStyle = '#FF5722';
+            ctx.font = 'bold 13px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`🔨 RÜSTUNGSBRUCH: ${remAB}s`, canvas.width / 2, hudY + 12);
+            ctx.globalAlpha = 1;
+            hudY -= 28;
+        } else if (armorBreakActive) {
+            armorBreakActive = false;
+            showBanner('🔨 Rüstungsbruch abgelaufen!');
         }
 
         // Screen flash (boss kill / special events)

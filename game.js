@@ -80,6 +80,8 @@ let armorBreakEnd    = 0;
 let airstrikeMode = false;  // player activated airstrike targeting
 let airstrikeCharges = 3;   // charges per game
 let airstrikeUsedThisGame = 0;
+let mouseCanvasX = -999;    // for airstrike preview circle
+let mouseCanvasY = -999;
 
 // ================================================================
 // AUDIO SYSTEM (Web Audio API — no external files)
@@ -3041,6 +3043,28 @@ function gameLoop(timestamp) {
 
         ctx.restore(); // end shake transform
 
+        // Airstrike targeting preview
+        if (airstrikeMode && mouseCanvasX > 0) {
+            const aPulse = 0.25 + Math.abs(Math.sin(Date.now() / 200)) * 0.15;
+            ctx.strokeStyle = 'rgba(255,50,0,0.85)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            ctx.beginPath();
+            ctx.arc(mouseCanvasX, mouseCanvasY, AIRSTRIKE_RADIUS, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = `rgba(255,50,0,${aPulse.toFixed(2)})`;
+            ctx.beginPath();
+            ctx.arc(mouseCanvasX, mouseCanvasY, AIRSTRIKE_RADIUS, 0, Math.PI * 2);
+            ctx.fill();
+            // Label
+            ctx.fillStyle = 'rgba(255,90,50,0.95)';
+            ctx.font = 'bold 12px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText('💣 ZIEL WÄHLEN', mouseCanvasX, mouseCanvasY - AIRSTRIKE_RADIUS - 4);
+        }
+
         // Boss / Elite / Titan HP bars (drawn after ctx.restore so they don't shake)
         drawBossBar();
         drawEliteBar();
@@ -3273,6 +3297,16 @@ canvas.addEventListener('contextmenu', e => {
         selectedTower = null;
         updateUI();
     }
+});
+
+canvas.addEventListener('mousemove', e => {
+    const r = canvas.getBoundingClientRect();
+    mouseCanvasX = (e.clientX - r.left) * (canvas.width  / r.width);
+    mouseCanvasY = (e.clientY - r.top)  * (canvas.height / r.height);
+});
+
+canvas.addEventListener('mouseleave', () => {
+    mouseCanvasX = -999; mouseCanvasY = -999;
 });
 
 canvas.addEventListener('click', e => {
@@ -3599,6 +3633,11 @@ document.addEventListener('keydown', e => {
         selectedTowerType = null;
         selectedTower = null;
         document.querySelectorAll('.tower-btn').forEach(b => b.classList.remove('selected'));
+        if (airstrikeMode) {
+            airstrikeMode = false;
+            canvas.style.cursor = 'default';
+            updateAirstrikeBtn();
+        }
         updateUI();
     }
     // T: cycle targeting mode on selected tower

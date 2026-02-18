@@ -1636,6 +1636,33 @@ function killEnemy(idx) {
         // Boss power-up drop
         setTimeout(() => triggerBossDrop(), 400);
     }
+    if (e.isElite) {
+        triggerShake(10);
+        screenFlash = 0.35;
+        // Golden elite kill burst
+        for (let i = 0; i < 20; i++) {
+            const a = (Math.PI * 2 * i) / 20 + Math.random() * 0.3;
+            const sp = 2 + Math.random() * 4;
+            particles.push(new Particle(e.x, e.y, '#FF5252',
+                Math.cos(a) * sp, Math.sin(a) * sp, 25 + Math.floor(Math.random() * 15), 4));
+        }
+        spawnFloatText(e.x, e.y - 30, '💀 Elite besiegt!', '#FF5252');
+    }
+    if (e.isTitan) {
+        triggerShake(20);
+        screenFlash = 0.8;
+        // Massive titan kill explosion
+        for (let i = 0; i < 5; i++) {
+            setTimeout(() => spawnExplosion(
+                e.x + (Math.random() - 0.5) * 50,
+                e.y + (Math.random() - 0.5) * 50,
+                ['#1A237E','#3949AB','#7986CB','#FFFFFF'][Math.floor(Math.random() * 4)],
+                16
+            ), i * 80);
+        }
+        spawnFloatText(e.x, e.y - 35, '🦾 TITAN GEFALLEN!', '#3949AB');
+        sfxKill(true); // reuse boss kill sound
+    }
     enemies.splice(idx, 1);
     if (score > highScore) {
         highScore = score;

@@ -795,14 +795,17 @@ class Enemy {
 
         // Stealth ghost: semi-transparent with shimmer + wisp particles
         if (this.isStealthy) {
-            const shimmer = 0.35 + Math.abs(Math.sin(Date.now() / 300)) * 0.25;
+            const shimmer = radarActive
+                ? 0.75 + Math.abs(Math.sin(Date.now() / 200)) * 0.25 // More visible with radar
+                : 0.35 + Math.abs(Math.sin(Date.now() / 300)) * 0.25;
             ctx.globalAlpha = shimmer;
-            // Ethereal wisp particles (emitted from ghost)
+            // Ethereal wisp particles (emitted from ghost); red when radar-detected
             if (particles.length < MAX_PARTICLES - 5 && Math.random() < 0.15) {
                 particles.push(new Particle(
                     this.x + (Math.random() - 0.5) * this.radius * 2,
                     this.y + (Math.random() - 0.5) * this.radius * 2,
-                    '#E1BEE7', (Math.random() - 0.5) * 0.5, -0.6 - Math.random() * 0.5,
+                    radarActive ? '#EF9A9A' : '#E1BEE7',
+                    (Math.random() - 0.5) * 0.5, -0.6 - Math.random() * 0.5,
                     20 + Math.floor(Math.random() * 10), 3
                 ));
             }
@@ -921,7 +924,8 @@ class Tower {
 
     getStats() {
         const u    = UPGRADES[this.level - 1];
-        const dmgBoost = (Date.now() < damageBoostEnd) ? damageBoostMult : 1.0;
+        const lastStandBoost = lives <= 3 ? 1.25 : 1.0; // Last Stand: +25% dmg when desperate
+        const dmgBoost = ((Date.now() < damageBoostEnd) ? damageBoostMult : 1.0) * lastStandBoost;
         const synergy  = 1.0 + this.getSynergyBonus();
         const veteran  = this.getVeteranBonus();
         return {
@@ -3052,6 +3056,23 @@ function gameLoop(timestamp) {
         } else if (radarActive) {
             radarActive = false;
             showBanner('📡 Radar deaktiviert!');
+        }
+
+        // Last Stand indicator (lives ≤ 3)
+        if (lives > 0 && lives <= 3) {
+            const lsPulse = 0.7 + Math.abs(Math.sin(Date.now() / 250)) * 0.3;
+            ctx.globalAlpha = lsPulse;
+            ctx.fillStyle = 'rgba(180,0,0,0.60)';
+            ctx.beginPath();
+            ctx.roundRect(canvas.width / 2 - 95, hudY, 190, 24, 8);
+            ctx.fill();
+            ctx.fillStyle = '#FF5252';
+            ctx.font = 'bold 13px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`⚠️ LAST STAND! +25% Schaden`, canvas.width / 2, hudY + 12);
+            ctx.globalAlpha = 1;
+            hudY -= 28;
         }
 
         // Armor break active indicator

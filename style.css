@@ -1112,6 +1112,35 @@ body {
     text-shadow: 0 0 6px rgba(183,28,28,0.4);
 }
 
+/* Stats modal */
+.stats-modal-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 0;
+}
+
+.stats-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 12px;
+    background: #f8f9ff;
+    border-radius: 8px;
+    font-size: 0.9em;
+    border: 1px solid #e0e4ff;
+}
+
+.stats-row strong { color: var(--primary); }
+
+.stats-kills {
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.stats-kills span:last-child {
+    font-size: 0.85em;
+    color: var(--text-dim);
+}
+
 /* Laser tower button spans full width */
 .tower-btn-wide {
     grid-column: 1 / -1;

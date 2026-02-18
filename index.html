@@ -23,6 +23,15 @@
     </div>
 </div>
 
+<!-- Stats Modal -->
+<div id="statsModal" class="overlay" style="display:none;">
+    <div class="overlay-box" style="min-width:280px;max-width:380px;">
+        <h2>📊 Statistiken</h2>
+        <div id="statsContent" class="stats-modal-content"></div>
+        <button id="closeStats" class="btn-primary" style="margin-top:12px;">✖ Schließen</button>
+    </div>
+</div>
+
 <!-- Tower Shop Tooltip -->
 <div id="towerTooltip" class="tower-tooltip" style="display:none;"></div>
 
@@ -188,6 +197,7 @@
         <div class="header-top">
             <h1>🐚 Shelldon's Tower Defense</h1>
             <div class="header-btns">
+                <button id="statsBtn" class="help-btn" title="Statistiken">📊</button>
                 <button id="achBtn" class="help-btn" title="Errungenschaften">🏅</button>
                 <button id="helpBtn" class="help-btn" title="Hilfe / How to play">❓</button>
             </div>
@@ -227,6 +237,10 @@
             </div>
             <div class="stat" id="diffStat">
                 <span id="diffIcon">⚔️</span>
+            </div>
+            <div class="stat" id="noLeakStat" style="display:none;" title="No-Leak Streak">
+                <span class="stat-icon">🛡</span>
+                <span id="noLeakCount">0</span>
             </div>
         </div>
     </div>

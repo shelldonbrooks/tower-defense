@@ -2511,6 +2511,14 @@ function updateUI() {
     const diffEl = document.getElementById('diffIcon');
     if (diffEl) diffEl.textContent = diffIcons[selectedDifficulty] || '⚔️';
 
+    // No-leak streak indicator
+    const noLeakEl = document.getElementById('noLeakStat');
+    if (noLeakEl) {
+        noLeakEl.style.display = _noLeakCount > 0 ? 'flex' : 'none';
+        const nlCount = document.getElementById('noLeakCount');
+        if (nlCount) nlCount.textContent = _noLeakCount;
+    }
+
     // Update game timer
     const elapsed = Math.floor((Date.now() - gameStartTime) / 1000);
     const mins = Math.floor(elapsed / 60);
@@ -3139,6 +3147,52 @@ document.getElementById('upgradeTower').addEventListener('mouseleave', () => {
 document.getElementById('overlayBtn').addEventListener('click', resetGame);
 
 let pausedBeforeHelp = false;
+
+document.getElementById('statsBtn').addEventListener('click', () => {
+    const wasRunning = !gamePaused && gameRunning;
+    if (wasRunning) { gamePaused = true; document.getElementById('pauseBtn').textContent = '▶ Weiter'; }
+
+    const elapsed = Math.floor((Date.now() - gameStartTime) / 1000);
+    const mins = Math.floor(elapsed / 60);
+    const secs = elapsed % 60;
+    const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
+
+    const killDistrib = Object.entries(killsByType)
+        .sort((a, b) => b[1] - a[1])
+        .map(([icon, count]) => `${icon}×${count}`)
+        .join(' ');
+
+    const topTower = [...towers].sort((a, b) => b.kills - a.kills)[0];
+    const topTowerStr = topTower
+        ? `${topTower.config.icon} ${topTower.config.name} L${topTower.level} (${topTower.kills} kills)`
+        : '—';
+
+    document.getElementById('statsContent').innerHTML =
+        `<div class="stats-row"><span>⏱ Spielzeit</span><span>${timeStr}</span></div>` +
+        `<div class="stats-row"><span>🌊 Wellen abgeschlossen</span><span>${wave}</span></div>` +
+        `<div class="stats-row"><span>💀 Kills</span><span>${totalKills.toLocaleString()}</span></div>` +
+        `<div class="stats-row"><span>💰 Gold verdient</span><span>${totalGoldEarned.toLocaleString()}</span></div>` +
+        `<div class="stats-row"><span>💥 Schaden gesamt</span><span>${Math.floor(totalDamageDealt).toLocaleString()}</span></div>` +
+        `<div class="stats-row"><span>❤️ Leben verloren</span><span>${livesLostEver}</span></div>` +
+        `<div class="stats-row"><span>🛡 No-Leak Streak</span><span>${_noLeakCount}</span></div>` +
+        `<div class="stats-row"><span>🗼 Türme platziert</span><span>${towers.length}</span></div>` +
+        `<div class="stats-row"><span>⭐ Top-Turm</span><span>${topTowerStr}</span></div>` +
+        (killDistrib ? `<div class="stats-row stats-kills"><span>Kills:</span><span>${killDistrib}</span></div>` : '');
+
+    const modal = document.getElementById('statsModal');
+    modal.style.display = 'flex';
+    modal.dataset.wasRunning = wasRunning ? '1' : '0';
+});
+
+document.getElementById('closeStats').addEventListener('click', () => {
+    const modal = document.getElementById('statsModal');
+    if (!modal) return;
+    modal.style.display = 'none';
+    if (modal.dataset.wasRunning === '1') {
+        gamePaused = false;
+        document.getElementById('pauseBtn').textContent = '⏸ Pause';
+    }
+});
 
 document.getElementById('helpBtn').addEventListener('click', () => {
     pausedBeforeHelp = gamePaused;

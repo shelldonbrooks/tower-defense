@@ -2686,6 +2686,13 @@ function drawWaveProgress() {
     ctx.beginPath();
     ctx.roundRect(barX, barY, barW * progress, barH, 3);
     ctx.fill();
+
+    // Show remaining enemy count
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.font = '10px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(`${Math.max(0,remaining)} / ${roster}`, canvas.width / 2, barY + barH + 2);
 }
 
 let _waveRosterTotal = 0; // set when wave starts

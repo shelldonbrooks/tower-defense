@@ -1785,8 +1785,8 @@ function buildWaveRoster(waveNum) {
         }
     }
 
-    if (waveNum >= 18) {
-        const ghostCount = Math.min(1 + Math.floor((waveNum - 18) / 5), 3);
+    if (waveNum >= 15) {
+        const ghostCount = Math.min(1 + Math.floor((waveNum - 15) / 5), 3);
         for (let i = 0; i < ghostCount; i++) {
             configs.push({
                 health: Math.floor(baseHp * 1.5),
@@ -2256,6 +2256,12 @@ function updateUI() {
     document.getElementById('highscore').textContent = highScore;
     const mapNameEl = document.getElementById('mapName');
     if (mapNameEl) mapNameEl.textContent = ALL_MAPS[selectedMapIndex].name;
+    // Update game timer
+    const elapsed = Math.floor((Date.now() - gameStartTime) / 1000);
+    const mins = Math.floor(elapsed / 60);
+    const secs = elapsed % 60;
+    const timerEl = document.getElementById('gameTimer');
+    if (timerEl) timerEl.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
 
     document.querySelectorAll('.tower-btn').forEach(btn => {
         btn.classList.toggle('disabled', gold < parseInt(btn.dataset.cost));
@@ -2539,6 +2545,35 @@ function gameLoop(timestamp) {
         updateUI();
     }
 
+    // Pause overlay (drawn even when paused)
+    if (gamePaused && gameRunning) {
+        ctx.fillStyle = 'rgba(0,0,0,0.45)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.font = 'bold 36px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        ctx.fillText('⏸ PAUSIERT', canvas.width / 2, canvas.height / 2);
+        ctx.font = '16px Arial';
+        ctx.fillStyle = 'rgba(255,255,255,0.65)';
+        ctx.fillText('Drücke SPACE zum Weiterspielen', canvas.width / 2, canvas.height / 2 + 44);
+        ctx.restore();
+    }
+
+    // Speed indicator (top-left corner)
+    if (gameSpeed > 1 && !gamePaused) {
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.beginPath();
+        ctx.roundRect(6, 6, 44, 22, 5);
+        ctx.fill();
+        ctx.fillStyle = '#81D4FA';
+        ctx.font = 'bold 13px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`${gameSpeed}×`, 28, 17);
+    }
+
     if (gameRunning) requestAnimationFrame(gameLoop);
 }
 
@@ -2809,6 +2844,17 @@ document.addEventListener('keydown', e => {
         selectedTower = null;
         document.querySelectorAll('.tower-btn').forEach(b => b.classList.remove('selected'));
         updateUI();
+    }
+    // T: cycle targeting mode on selected tower
+    if ((e.key === 't' || e.key === 'T') && selectedTower) {
+        const modes = ['first', 'last', 'strong', 'weak'];
+        const curIdx = modes.indexOf(selectedTower.targetMode);
+        selectedTower.targetMode = modes[(curIdx + 1) % modes.length];
+        selectedTower.target = null; // force retarget
+        updateTowerPanel();
+        const modeNames = { first: 'Vorne', last: 'Hinten', strong: 'Stark', weak: 'Schwach' };
+        spawnFloatText(selectedTower.x, selectedTower.y - 28,
+            `→ ${modeNames[selectedTower.targetMode]}`, '#81D4FA');
     }
     if (e.key === 'Enter' && !waveInProgress) {
         document.getElementById('startWave').click();

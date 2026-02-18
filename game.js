@@ -689,6 +689,18 @@ class Enemy {
             ctx.fillText('🛡', this.x + this.radius - 1, this.y - this.radius + 1);
         }
 
+        // Titan triple ring visual
+        if (this.isTitan) {
+            for (let ri = 0; ri < 3; ri++) {
+                const rp = 0.18 + Math.abs(Math.sin(Date.now() / (350 + ri * 120) + ri)) * 0.35;
+                ctx.strokeStyle = `rgba(26,35,126,${rp.toFixed(2)})`;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius + 7 + ri * 7, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        }
+
         // Elite pulsing aura
         if (this.isElite) {
             const ePulse = 0.3 + Math.abs(Math.sin(Date.now() / 300)) * 0.5;
@@ -2188,7 +2200,9 @@ function spawnWave() {
     } else if (wave % 7 === 0 && wave % 5 !== 0) {
         setTimeout(() => showBanner(`👹 ELITE WELLE ${wave}! Ein besonderer Gegner naht!`), 500);
         triggerShake(4);
-    } else if (wave === 10 || wave === 20 || wave === 30 || wave === 40) {
+    } else if (wave >= 30 && wave % 5 !== 0 && wave % 7 !== 0) {
+        setTimeout(() => showBanner(`🦾 TITAN auf Welle ${wave}! Schwer gepanzert!`), 500);
+    } else if (wave === 10 || wave === 20 || wave === 40) {
         setTimeout(() => showBanner(`🔥 Welle ${wave} — Es wird ernst!`), 400);
     }
 
@@ -2418,6 +2432,47 @@ function drawDangerOverlay() {
     grad.addColorStop(1, `rgba(200,0,0,${pulse.toFixed(3)})`);
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+// ================================================================
+// TITAN HP BAR
+// ================================================================
+function drawTitanBar() {
+    const titan = enemies.find(e => e.isTitan);
+    if (!titan) return;
+
+    const hasBoss  = enemies.some(e => e.icon === '💀');
+    const hasElite = enemies.some(e => e.isElite);
+    const barW  = canvas.width * 0.38;
+    const barH  = 14;
+    const barX  = (canvas.width - barW) / 2;
+    const barY  = 8 + (hasBoss ? 30 : 0) + (hasElite ? 27 : 0);
+    const hRatio = titan.health / titan.maxHealth;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.60)';
+    ctx.beginPath();
+    ctx.roundRect(barX - 44, barY - 4, barW + 50, barH + 8, 8);
+    ctx.fill();
+
+    ctx.fillStyle = '#222';
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, barW, barH, 3);
+    ctx.fill();
+
+    const grad = ctx.createLinearGradient(barX, 0, barX + barW * hRatio, 0);
+    grad.addColorStop(0, '#1A237E');
+    grad.addColorStop(1, '#3949AB');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, barW * hRatio, barH, 3);
+    ctx.fill();
+
+    ctx.font = 'bold 10px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'white';
+    ctx.fillText(`🦾 TITAN  ${Math.ceil(titan.health).toLocaleString()} / ${titan.maxHealth.toLocaleString()}`,
+                 canvas.width / 2, barY + barH / 2);
 }
 
 // ================================================================
@@ -2803,9 +2858,10 @@ function gameLoop(timestamp) {
 
         ctx.restore(); // end shake transform
 
-        // Boss / Elite HP bars (drawn after ctx.restore so they don't shake)
+        // Boss / Elite / Titan HP bars (drawn after ctx.restore so they don't shake)
         drawBossBar();
         drawEliteBar();
+        drawTitanBar();
 
         // Danger vignette (low lives warning)
         drawDangerOverlay();

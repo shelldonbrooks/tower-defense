@@ -77,6 +77,9 @@ let radarActive = false;   // wave event: ghosts are visible
 let radarEnd    = 0;
 let armorBreakActive = false; // wave event: armor ignored
 let armorBreakEnd    = 0;
+let airstrikeMode = false;  // player activated airstrike targeting
+let airstrikeCharges = 3;   // charges per game
+let airstrikeUsedThisGame = 0;
 
 // ================================================================
 // AUDIO SYSTEM (Web Audio API — no external files)
@@ -1733,6 +1736,69 @@ function killEnemy(idx) {
 }
 
 // ================================================================
+// AIRSTRIKE ABILITY
+// ================================================================
+const AIRSTRIKE_COST   = 200;
+const AIRSTRIKE_RADIUS = 80;
+const AIRSTRIKE_DAMAGE = 400;
+
+function activateAirstrike() {
+    if (airstrikeCharges <= 0 || gold < AIRSTRIKE_COST) return;
+    airstrikeMode = !airstrikeMode;
+    canvas.style.cursor = airstrikeMode ? 'crosshair' : 'default';
+    updateAirstrikeBtn();
+}
+
+function dropAirstrike(cx, cy) {
+    gold -= AIRSTRIKE_COST;
+    airstrikeCharges--;
+    airstrikeUsedThisGame++;
+    airstrikeMode = false;
+    canvas.style.cursor = 'default';
+    updateAirstrikeBtn();
+    updateUI();
+    sfxBoss(); // reuse big sound
+
+    let totalDmg = 0;
+    const toKill = [];
+    for (const e of enemies) {
+        const dist = Math.hypot(e.x - cx, e.y - cy);
+        if (dist <= AIRSTRIKE_RADIUS) {
+            const dmg = AIRSTRIKE_DAMAGE * Math.max(0.3, 1 - dist / AIRSTRIKE_RADIUS);
+            if (e.takeDamage(dmg, true)) toKill.push(e);
+            totalDmg += dmg;
+        }
+    }
+    // Kill enemies and give rewards
+    for (const e of toKill) {
+        const idx = enemies.indexOf(e);
+        if (idx !== -1) killEnemy(idx);
+    }
+
+    // Visual: large explosion
+    for (let i = 0; i < 8; i++) {
+        setTimeout(() => spawnExplosion(
+            cx + (Math.random() - 0.5) * AIRSTRIKE_RADIUS * 1.2,
+            cy + (Math.random() - 0.5) * AIRSTRIKE_RADIUS * 1.2,
+            ['#FF6B35','#FF3300','#FFD700','#FFFFFF'][Math.floor(Math.random()*4)],
+            14
+        ), i * 40);
+    }
+    triggerShake(12);
+    screenFlash = 0.4;
+    spawnFloatText(cx, cy - 40, `💣 ${Math.floor(totalDmg)} Schaden!`, '#FF6B35');
+    if (airstrikeUsedThisGame === 1) unlockAchievement('airstrike_first');
+}
+
+function updateAirstrikeBtn() {
+    const btn = document.getElementById('airstrikeBtn');
+    if (!btn) return;
+    btn.disabled = airstrikeCharges <= 0 || gold < AIRSTRIKE_COST;
+    btn.classList.toggle('selected', airstrikeMode);
+    btn.textContent = `💣 Luftschlag (${AIRSTRIKE_COST}g) ×${airstrikeCharges}`;
+}
+
+// ================================================================
 // WAVE EVENTS
 // ================================================================
 const WAVE_EVENTS = [
@@ -2694,6 +2760,8 @@ function updateUI() {
     const diffEl = document.getElementById('diffIcon');
     if (diffEl) diffEl.textContent = diffIcons[selectedDifficulty] || '⚔️';
 
+    updateAirstrikeBtn();
+
     // No-leak streak indicator
     const noLeakEl = document.getElementById('noLeakStat');
     if (noLeakEl) {
@@ -2860,6 +2928,9 @@ function resetGame() {
     killGoldMult = 1.0; killGoldEnd = 0; prevGoldActive = false;
     radarActive = false; radarEnd = 0;
     armorBreakActive = false; armorBreakEnd = 0;
+    airstrikeMode = false; airstrikeCharges = 3; airstrikeUsedThisGame = 0;
+    canvas.style.cursor = 'default';
+    updateAirstrikeBtn();
     enemySpeedMult = 1.0;
     recentKillTimes = []; comboActive = false; _noLeakCount = 0;
     livesLostEver = 0; waveSplash = null;
@@ -3209,6 +3280,13 @@ canvas.addEventListener('click', e => {
     const sx = canvas.width / r.width, sy = canvas.height / r.height;
     const cx = (e.clientX - r.left) * sx;
     const cy = (e.clientY - r.top)  * sy;
+
+    // Airstrike targeting mode
+    if (airstrikeMode) {
+        dropAirstrike(cx, cy);
+        return;
+    }
+
     const gx = Math.floor(cx / CELL_SIZE);
     const gy = Math.floor(cy / CELL_SIZE);
 
@@ -3399,6 +3477,10 @@ document.getElementById('upgradeTower').addEventListener('mouseleave', () => {
 document.getElementById('overlayBtn').addEventListener('click', resetGame);
 
 let pausedBeforeHelp = false;
+
+document.getElementById('airstrikeBtn').addEventListener('click', () => {
+    activateAirstrike();
+});
 
 document.getElementById('statsBtn').addEventListener('click', () => {
     const wasRunning = !gamePaused && gameRunning;
@@ -3715,6 +3797,7 @@ const ACHIEVEMENTS = [
     { id: 'titan_kill',     icon: '🦾', name: 'Titanenkiller',       desc: 'Einen Titan besiegt (W30+)' },
     { id: 'wave_35',        icon: '🌙', name: 'Unsterblich II',      desc: 'Welle 35 erreichen' },
     { id: 'wave_50',        icon: '🌠', name: 'Gott-Modus',          desc: 'Welle 50 erreichen!' },
+    { id: 'airstrike_first', icon: '💣', name: 'Luftüberlegenheit',   desc: 'Ersten Luftschlag eingesetzt' },
 ];
 
 let _achUnlocked = new Set(JSON.parse(localStorage.getItem(ACH_KEY) || '[]'));

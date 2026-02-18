@@ -330,6 +330,26 @@ body {
 
 .btn-full { width: 100%; }
 
+.btn-danger {
+    background: linear-gradient(135deg, #c62828, #b71c1c);
+    color: white;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.82em;
+    font-weight: 600;
+    transition: all 0.18s;
+    margin-top: 6px;
+}
+.btn-danger:hover:not(:disabled) {
+    background: linear-gradient(135deg, #e53935, #c62828);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(183,28,28,0.35);
+}
+.btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-danger.selected { box-shadow: 0 0 0 3px #FF5252; }
+
 .btn-row {
     display: flex;
     gap: 7px;

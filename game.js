@@ -72,6 +72,7 @@ let livesLostEver = 0; // for perfect-game achievement
 let waveSplash = null; // { text, alpha } — wave start canvas splash
 let killsByType = {}; // kill distribution per enemy icon
 let milestonesTriggered = new Set(); // kill milestones already fired
+let focusedEnemy = null; // player-marked focus target for towers
 
 // ================================================================
 // AUDIO SYSTEM (Web Audio API — no external files)
@@ -829,6 +830,21 @@ class Enemy {
         // Reset stealth alpha before health bar
         ctx.globalAlpha = 1;
 
+        // Focus target crosshair
+        if (this === focusedEnemy) {
+            const cPulse = 0.55 + Math.abs(Math.sin(Date.now() / 180)) * 0.45;
+            ctx.strokeStyle = `rgba(255,50,50,${cPulse.toFixed(2)})`;
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = 1;
+            const cr = this.radius + 12, cg = 5;
+            ctx.beginPath();
+            ctx.moveTo(this.x - cr, this.y); ctx.lineTo(this.x - cg, this.y);
+            ctx.moveTo(this.x + cg, this.y); ctx.lineTo(this.x + cr, this.y);
+            ctx.moveTo(this.x, this.y - cr); ctx.lineTo(this.x, this.y - cg);
+            ctx.moveTo(this.x, this.y + cg); ctx.lineTo(this.x, this.y + cr);
+            ctx.stroke();
+        }
+
         // Health bar
         const bw = this.radius * 2.2;
         const bh = 4;
@@ -999,6 +1015,15 @@ class Tower {
     }
 
     findTarget(range) {
+        // Focus target: 'first' mode towers prioritize the player's marked enemy
+        if (this.targetMode === 'first' && focusedEnemy && focusedEnemy.health > 0) {
+            const dx = focusedEnemy.x - this.x, dy = focusedEnemy.y - this.y;
+            if (Math.sqrt(dx * dx + dy * dy) <= range &&
+                (!focusedEnemy.isStealthy || this.canTargetStealthy())) {
+                return focusedEnemy;
+            }
+        }
+
         let best = null;
         let bestVal = this.targetMode === 'last' ? Infinity
                     : this.targetMode === 'weak' ? Infinity
@@ -1663,6 +1688,7 @@ function killEnemy(idx) {
         spawnFloatText(e.x, e.y - 35, '🦾 TITAN GEFALLEN!', '#3949AB');
         sfxKill(true); // reuse boss kill sound
     }
+    if (e === focusedEnemy) focusedEnemy = null;
     enemies.splice(idx, 1);
     if (score > highScore) {
         highScore = score;
@@ -2197,6 +2223,7 @@ function spawnWave() {
     waveInProgress = true;
     waveSpawnPending = 0;
     livesAtWaveStart = lives;
+    focusedEnemy = null; // clear focus target on wave start
     sfxWaveStart();
     waveSplash = { text: `🌊 Welle ${wave}`, alpha: 1.2 }; // alpha > 1 for a hold delay
     markMapPlayed(); // track maps for achievement
@@ -3125,6 +3152,15 @@ canvas.addEventListener('click', e => {
                 updateUI();
                 return;
             }
+        }
+    }
+
+    // Check if player clicked on an enemy (no tower type selected, no placed tower clicked)
+    if (!selectedTowerType && waveInProgress) {
+        const hitEnemy = enemies.find(en => Math.hypot(en.x - cx, en.y - cy) <= en.radius + 6);
+        if (hitEnemy) {
+            focusedEnemy = (focusedEnemy === hitEnemy) ? null : hitEnemy;
+            return;
         }
     }
 

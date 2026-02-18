@@ -846,8 +846,9 @@ class Tower {
         this.totalDmg  = 0;
         this.angle     = 0;   // current rotation (radians)
         this.targetMode = 'first'; // 'first' | 'last' | 'strong' | 'weak'
-        this.lockTime  = 0;   // for laser tower lock-on ramp
-        this.shotCount = 0;   // for L3 crit/overclock tracking
+        this.lockTime     = 0;   // for laser tower lock-on ramp
+        this.overdriveTime = 0;  // for laser L3 overdrive
+        this.shotCount    = 0;   // for L3 crit/overclock tracking
     }
 
     getSynergyBonus() {
@@ -1011,7 +1012,14 @@ class Tower {
         const dtMs = Math.min(now - this.lastFired, 200);
         this.lockTime += dtMs;
         const lockFrac   = Math.min(1, this.lockTime / this.config.lockRampMs);
-        const maxDPS     = this.config.maxDPS * UPGRADES[this.level - 1].dmgMult;
+        // Laser L3: Overdrive — after 1s at full lock, DPS climbs to 2× max
+        if (this.level >= 3 && lockFrac >= 1.0) {
+            this.overdriveTime = (this.overdriveTime || 0) + dtMs;
+        } else {
+            this.overdriveTime = 0;
+        }
+        const overdriveFrac = Math.min(1, Math.max(0, (this.overdriveTime - 1000) / 1000));
+        const maxDPS     = this.config.maxDPS * UPGRADES[this.level - 1].dmgMult * (1 + overdriveFrac);
         const currentDPS = stats.damage + (maxDPS - stats.damage) * lockFrac;
         const dmg        = currentDPS * (dtMs / 1000);
 
@@ -1105,6 +1113,18 @@ class Tower {
                 .sort((a, b) => b.getPathProgress() - a.getPathProgress())[0];
             if (secondary) spawnProj(secondary);
         }
+
+        // Basic L3: every 3rd shot = BURST (2 extra shots at other enemies)
+        if (this.type === 'basic' && this.level >= 3 && this.shotCount % 3 === 0) {
+            const burstTargets = enemies
+                .filter(e => e !== this.target && Math.hypot(e.x - this.x, e.y - this.y) <= stats.range)
+                .sort((a, b) => b.getPathProgress() - a.getPathProgress())
+                .slice(0, 2);
+            for (const bt of burstTargets) spawnProj(bt);
+            if (burstTargets.length > 0) {
+                spawnFloatText(this.x, this.y - 28, '💫 BURST!', '#4CAF50');
+            }
+        }
     }
 
     draw() {
@@ -1154,25 +1174,34 @@ class Tower {
         // Laser beam (continuous fire beam) — drawn before barrel so barrel appears on top
         if (this.config.isLaser && this.target && this.target.health > 0) {
             const lockFrac = Math.min(1, (this.lockTime || 0) / this.config.lockRampMs);
+            const odFrac   = Math.min(1, Math.max(0, ((this.overdriveTime || 0) - 1000) / 1000));
             const beamAlpha = 0.55 + lockFrac * 0.45;
-            const beamW = 2 + lockFrac * 4;
+            const beamW = 2 + lockFrac * 4 + odFrac * 3;
+            // Colors shift from red → orange → white in overdrive
+            const r = 255, g = Math.floor(23 + odFrac * 180), b = Math.floor(68 * (1 - odFrac));
+            const beamColor = `${r},${g},${b}`;
             ctx.save();
             ctx.beginPath();
             ctx.moveTo(this.x, this.y);
             ctx.lineTo(this.target.x, this.target.y);
             // Outer glow
-            ctx.strokeStyle = `rgba(255,23,68,${(beamAlpha * 0.35).toFixed(2)})`;
-            ctx.lineWidth = beamW + 10;
+            ctx.strokeStyle = `rgba(${beamColor},${(beamAlpha * 0.35).toFixed(2)})`;
+            ctx.lineWidth = beamW + 10 + odFrac * 6;
             ctx.stroke();
             // Hot core
-            ctx.strokeStyle = `rgba(255,100,120,${beamAlpha.toFixed(2)})`;
+            ctx.strokeStyle = `rgba(${beamColor},${beamAlpha.toFixed(2)})`;
             ctx.lineWidth = beamW;
             ctx.stroke();
             // White center
-            ctx.strokeStyle = `rgba(255,255,255,${Math.min(0.95, beamAlpha + 0.1).toFixed(2)})`;
+            ctx.strokeStyle = `rgba(255,255,255,${Math.min(0.95, beamAlpha + 0.1 + odFrac * 0.3).toFixed(2)})`;
             ctx.lineWidth = beamW * 0.35;
             ctx.stroke();
             ctx.restore();
+            // Overdrive indicator
+            if (odFrac > 0) {
+                spawnFloatText && odFrac >= 1 && this.shotCount % 60 === 0 &&
+                    spawnFloatText(this.x, this.y - 32, '🔥 OVERDRIVE!', '#FF9800');
+            }
         }
 
         // Range ring when selected

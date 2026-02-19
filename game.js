@@ -2800,6 +2800,27 @@ function drawWaveProgress() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     ctx.fillText(`${Math.max(0,remaining)} / ${roster}`, canvas.width / 2, barY + barH + 2);
+
+    // Last enemy alert — pulsing indicator when only 1 enemy remains
+    if (waveSpawnPending === 0 && enemies.length === 1) {
+        const lePulse = 0.7 + Math.abs(Math.sin(Date.now() / 200)) * 0.3;
+        ctx.globalAlpha = lePulse;
+        ctx.fillStyle = '#FF9800';
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('⚡ LETZTER GEGNER!', canvas.width / 2, barY - 5);
+        ctx.globalAlpha = 1;
+        // Orange ring around the last enemy
+        const e = enemies[0];
+        const ringR = e.radius + 10 + Math.sin(Date.now() / 150) * 4;
+        ctx.strokeStyle = `rgba(255,152,0,${lePulse.toFixed(2)})`;
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, ringR, 0, Math.PI * 2);
+        ctx.stroke();
+    }
 }
 
 let _waveRosterTotal = 0; // set when wave starts
@@ -3887,6 +3908,19 @@ document.addEventListener('keydown', e => {
             updateAirstrikeBtn();
         }
         updateUI();
+    }
+    // U or W: upgrade selected tower
+    if ((e.key === 'u' || e.key === 'U' || e.key === 'w' || e.key === 'W') && selectedTower) {
+        e.preventDefault();
+        const uc = selectedTower.getUpgradeCost();
+        if (uc !== null && gold >= uc) {
+            gold -= uc;
+            selectedTower.level++;
+            sfxUpgrade();
+            spawnFloatText(selectedTower.x, selectedTower.y - 28, `⬆ L${selectedTower.level}!`, '#4CAF50');
+            checkAchievements();
+            updateUI();
+        }
     }
     // T: cycle targeting mode on selected tower
     if ((e.key === 't' || e.key === 'T') && selectedTower) {

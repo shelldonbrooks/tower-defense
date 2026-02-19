@@ -4162,6 +4162,11 @@ const ACHIEVEMENTS = [
     { id: 'turbofire_win',   icon: '🔥', name: 'Turbo-Kommandant',   desc: 'Welle mit Turbofeuer abgeschlossen' },
     { id: 'fluss_played',    icon: '🌊', name: 'Flussläufer',         desc: 'Fluss-Karte gespielt' },
     { id: 'repair_used',     icon: '💚', name: 'Rettungsanker',       desc: 'Notfall-Reparatur eingesetzt' },
+    { id: 'no_leak_10',      icon: '🛡🛡', name: 'Eisenwall',           desc: '10 Wellen ohne Schaden' },
+    { id: 'damage_100k',     icon: '💥', name: 'Vernichter',           desc: '100.000 Schaden in einer Partie' },
+    { id: 'kills_2000',      icon: '👑', name: 'Auslöscher',          desc: '2000 Gegner besiegt' },
+    { id: 'wave_40',         icon: '🌌', name: 'Unsterblich III',     desc: 'Welle 40 erreichen' },
+    { id: 'turrets_20',      icon: '🏯', name: 'Festungsherr',        desc: '20 Türme auf dem Feld' },
 ];
 
 let _achUnlocked = new Set(JSON.parse(localStorage.getItem(ACH_KEY) || '[]'));
@@ -4240,9 +4245,14 @@ function checkAchievements() {
     if (wave >= 25 && livesLostEver === 0) unlockAchievement('perfect_game');
     if (totalGoldEarned >= 10000) unlockAchievement('gold_10000');
     if (wave >= 35) unlockAchievement('wave_35');
+    if (wave >= 40) unlockAchievement('wave_40');
     if (wave >= 50) unlockAchievement('wave_50');
     if (totalGoldEarned >= 2000)  unlockAchievement('gold_2000');
     if (totalGoldEarned >= 5000)  unlockAchievement('gold_5000');
+    if (totalKills >= 2000)       unlockAchievement('kills_2000');
+    if (totalDamageDealt >= 100000) unlockAchievement('damage_100k');
+    if (_noLeakCount >= 10)       unlockAchievement('no_leak_10');
+    if (towers.length >= 20)      unlockAchievement('turrets_20');
     if (Date.now() < damageBoostEnd) unlockAchievement('full_upgrade');
     // Synergy master: any tower with +30% synergy bonus
     if (towers.some(t => t.getSynergyBonus() >= 0.30)) unlockAchievement('synergy_3');

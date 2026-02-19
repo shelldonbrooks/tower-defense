@@ -1981,6 +1981,24 @@ const WAVE_EVENTS = [
             turboFireEnd    = Date.now() + 20000;
             spawnFloatText(canvas.width / 2, canvas.height / 2 - 20, '🔥 TURBOFEUER! +50% Feuerrate!', '#FF6B35');
         }
+    },
+    {
+        id: 'hailstorm',
+        name: '❄️ Hagelsturm!',
+        desc: 'Alle Gegner sofort eingefroren (5s)!',
+        apply: () => {
+            const now = Date.now();
+            enemies.forEach(e => {
+                if (!e.isSlowImmune) e.applySlowEffect(0.2, 5000); // 80% slow for 5s
+            });
+            // Also spawn a cryo particle burst over the entire canvas
+            for (let i = 0; i < 15; i++) {
+                const cx = Math.random() * canvas.width;
+                const cy = Math.random() * canvas.height;
+                spawnExplosion(cx, cy, '#80DEEA', 6);
+            }
+            spawnFloatText(canvas.width / 2, canvas.height / 2 - 20, '❄️ HAGELSTURM! Eingefroren!', '#80DEEA');
+        }
     }
 ];
 
@@ -3132,6 +3150,46 @@ function gameLoop(timestamp) {
             ctx.fillText('💣 ZIEL WÄHLEN', mouseCanvasX, mouseCanvasY - AIRSTRIKE_RADIUS - 4);
         }
 
+        // Enemy hover tooltip (show name/HP when mouse is near an enemy)
+        if (!airstrikeMode && mouseCanvasX > 0 && waveInProgress) {
+            let closestEnemy = null, closestDist = 28;
+            for (const e of enemies) {
+                const d = Math.hypot(e.x - mouseCanvasX, e.y - mouseCanvasY);
+                if (d < closestDist) { closestDist = d; closestEnemy = e; }
+            }
+            if (closestEnemy) {
+                const e = closestEnemy;
+                const hPct = Math.round((e.health / e.maxHealth) * 100);
+                const labels = [];
+                if (e.isTitan)   labels.push('🦾 Titan');
+                else if (e.icon === '💀') labels.push('💀 Boss');
+                else if (e.isElite) labels.push('👹 Elite');
+                else {
+                    const nameMap = {'👾':'Normal','🏃':'Fast','🛡️':'Tank','🐝':'Schwarm',
+                        '🪲':'Larve','🧬':'Mutant','🔩':'Mech','👻':'Geist'};
+                    labels.push(nameMap[e.icon] || e.icon);
+                }
+                labels.push(`❤️ ${hPct}%`);
+                if (e.armorReduce > 0) labels.push(`🔩 Rüstung`);
+                if (e.regenDPS > 0)   labels.push(`♻ Regen`);
+                const ttText = labels.join('  ');
+                const ttW = Math.max(100, ctx.measureText(ttText).width + 18);
+                let ttX = e.x - ttW / 2, ttY = e.y - e.radius - 28;
+                if (ttX < 4) ttX = 4;
+                if (ttX + ttW > canvas.width - 4) ttX = canvas.width - ttW - 4;
+                if (ttY < 4) ttY = e.y + e.radius + 8;
+                ctx.fillStyle = 'rgba(15,15,30,0.85)';
+                ctx.beginPath();
+                ctx.roundRect(ttX, ttY, ttW, 20, 5);
+                ctx.fill();
+                ctx.fillStyle = '#fff';
+                ctx.font = '11px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(ttText, ttX + ttW / 2, ttY + 10);
+            }
+        }
+
         // Boss / Elite / Titan HP bars (drawn after ctx.restore so they don't shake)
         drawBossBar();
         drawEliteBar();
@@ -3318,6 +3376,31 @@ function gameLoop(timestamp) {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(`${gameSpeed}×`, 28, 17);
+    }
+
+    // Kill streak indicator (top-right corner) — shows when killing rapidly
+    const _now_ks = Date.now();
+    const recentKills = recentKillTimes.filter(t => _now_ks - t < 3000);
+    if (recentKills.length >= 3) {
+        const streak = recentKills.length;
+        const ksAge  = _now_ks - recentKills[0]; // ms since streak started
+        const ksFade = Math.max(0, 1 - (ksAge - 2000) / 1000); // fade last second
+        const ksPulse = 0.85 + Math.abs(Math.sin(_now_ks / 140)) * 0.15;
+        const ksAlpha = Math.min(ksFade, ksPulse);
+        const ksLabel = streak >= 10 ? `💀 ${streak} COMBO!` : streak >= 7 ? `🔥 ${streak} STREAK!` : `⚡ ${streak}×`;
+        const ksColor = streak >= 10 ? '#FF1744' : streak >= 7 ? '#FF6B35' : '#FFD700';
+        const ksW = 110;
+        ctx.globalAlpha = ksAlpha;
+        ctx.fillStyle = 'rgba(0,0,0,0.60)';
+        ctx.beginPath();
+        ctx.roundRect(canvas.width - ksW - 8, 6, ksW, 24, 6);
+        ctx.fill();
+        ctx.fillStyle = ksColor;
+        ctx.font = `bold ${streak >= 10 ? 14 : 13}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(ksLabel, canvas.width - ksW / 2 - 8, 18);
+        ctx.globalAlpha = 1;
     }
 
     if (gameRunning) requestAnimationFrame(gameLoop);

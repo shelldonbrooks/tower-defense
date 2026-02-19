@@ -2481,6 +2481,14 @@ function spawnWave() {
     } else if (wave % 5 === 0) {
         setTimeout(() => showBanner(`💀 BOSS WELLE ${wave}! Vorbereiten!`), 500);
         triggerShake(5);
+        screenFlash = 0.25;
+        // Boss dramatic splash
+        setTimeout(() => {
+            waveSplash = { text: '💀 BOSS!', alpha: 1.8 };
+            if (soundEnabled) {
+                _tone({ freq: 80, type: 'sawtooth', dur: 0.35, vol: 0.55, decay: 0.7, sweep: 30 });
+            }
+        }, 200);
     } else if (wave % 7 === 0 && wave % 5 !== 0) {
         setTimeout(() => showBanner(`👹 ELITE WELLE ${wave}! Ein besonderer Gegner naht!`), 500);
         triggerShake(4);
@@ -3201,6 +3209,38 @@ function gameLoop(timestamp) {
             ctx.textAlign = 'center';
             ctx.textBaseline = 'bottom';
             ctx.fillText('💣 ZIEL WÄHLEN', mouseCanvasX, mouseCanvasY - AIRSTRIKE_RADIUS - 4);
+        }
+
+        // Tower hover tooltip (show kills + stats when hovering a placed tower, not in build mode)
+        if (!airstrikeMode && !selectedTowerType && mouseCanvasX > 0) {
+            const hoverTower = towers.find(t => Math.hypot(t.x - mouseCanvasX, t.y - mouseCanvasY) < 20);
+            if (hoverTower && hoverTower !== selectedTower) {
+                const ht = hoverTower;
+                const hs = ht.getStats();
+                const hvW = 130, hvH = 54;
+                let hvX = ht.x + 22, hvY = ht.y - hvH / 2;
+                if (hvX + hvW > canvas.width - 4) hvX = ht.x - hvW - 22;
+                if (hvY < 4) hvY = 4;
+                if (hvY + hvH > canvas.height - 4) hvY = canvas.height - hvH - 4;
+                ctx.fillStyle = 'rgba(15,15,30,0.88)';
+                ctx.beginPath();
+                ctx.roundRect(hvX, hvY, hvW, hvH, 6);
+                ctx.fill();
+                ctx.fillStyle = ht.config.color;
+                ctx.font = 'bold 11px Arial';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'top';
+                ctx.fillText(`${ht.config.icon} ${ht.config.name} L${ht.level}`, hvX + 7, hvY + 7);
+                ctx.fillStyle = '#ddd';
+                ctx.font = '10px Arial';
+                const dps = ht.config.isLaser
+                    ? `${Math.round(hs.damage)}-${Math.round(hs.damage * 2.6)} DPS`
+                    : ht.config.isAura
+                    ? `${Math.round(hs.damage)} AOE`
+                    : `${Math.round(hs.damage)} Dmg`;
+                ctx.fillText(`💀 ${ht.kills} kills`, hvX + 7, hvY + 23);
+                ctx.fillText(`⚡ ${dps}`, hvX + 7, hvY + 35);
+            }
         }
 
         // Enemy hover tooltip (show name/HP when mouse is near an enemy)

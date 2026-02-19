@@ -2017,17 +2017,24 @@ const WAVE_EVENTS = [
         name: '❄️ Hagelsturm!',
         desc: 'Alle Gegner sofort eingefroren (5s)!',
         apply: () => {
-            const now = Date.now();
             enemies.forEach(e => {
                 if (!e.isSlowImmune) e.applySlowEffect(0.2, 5000); // 80% slow for 5s
             });
-            // Also spawn a cryo particle burst over the entire canvas
+            // Blue cryo particle burst across canvas
             for (let i = 0; i < 15; i++) {
-                const cx = Math.random() * canvas.width;
-                const cy = Math.random() * canvas.height;
-                spawnExplosion(cx, cy, '#80DEEA', 6);
+                setTimeout(() => {
+                    const cx = Math.random() * canvas.width;
+                    const cy = Math.random() * canvas.height;
+                    spawnExplosion(cx, cy, '#80DEEA', 6);
+                }, i * 40);
             }
+            // Brief blue screen flash
+            screenFlash = 0.35;
             spawnFloatText(canvas.width / 2, canvas.height / 2 - 20, '❄️ HAGELSTURM! Eingefroren!', '#80DEEA');
+            if (soundEnabled) {
+                _tone({ freq: 800, type: 'sine', dur: 0.3, vol: 0.35, decay: 0.4, sweep: 200 });
+                setTimeout(() => _tone({ freq: 400, type: 'sine', dur: 0.4, vol: 0.3, decay: 0.5, sweep: 100 }), 200);
+            }
         }
     }
 ];
@@ -2878,7 +2885,16 @@ function updateWavePreview() {
     if (counts.titan)  parts.push(`<span class="wp-titan">🦾 TITAN!</span>`);
     if (counts.boss)   parts.push(`<span class="wp-boss">💀 BOSS!</span>`);
 
-    el.innerHTML = `<strong>Welle ${nextWave}:</strong> ${parts.join(' ')}`;
+    // Difficulty meter for the next wave (1-5 stars based on wave + special enemies)
+    const threatScore = nextWave + counts.boss * 8 + counts.titan * 15 + counts.elite * 5
+                      + counts.mech * 2 + counts.ghost * 3;
+    const stars = threatScore <= 8 ? 1 : threatScore <= 18 ? 2 : threatScore <= 30 ? 3 : threatScore <= 45 ? 4 : 5;
+    const starColors = ['#4CAF50', '#8BC34A', '#FF9800', '#FF5722', '#F44336'];
+    const starDisplay = '★'.repeat(stars) + '☆'.repeat(5 - stars);
+    const totalEnemies = roster.length;
+
+    const waveBonus = 30 + nextWave * 12;
+    el.innerHTML = `<strong>Welle ${nextWave}:</strong> <span style="color:${starColors[stars-1]};font-weight:700;">${starDisplay}</span> <span style="color:#aaa;font-size:0.85em;">(${totalEnemies} Gegner)</span><br>${parts.join(' ')}<br><span style="color:#b8860b;font-size:0.85em;">+${waveBonus}💰 Wellenbonus</span>`;
 }
 
 function showBanner(msg) {

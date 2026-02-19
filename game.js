@@ -95,6 +95,7 @@ let mouseCanvasX = -999;    // for airstrike preview circle
 let mouseCanvasY = -999;
 let turboFireActive = false; // wave event: +50% fire rate
 let turboFireEnd    = 0;
+let repairCharges   = 1;    // emergency repair: +3 lives, costs 150g, 1 use per game
 
 // ================================================================
 // AUDIO SYSTEM (Web Audio API — no external files)
@@ -1848,6 +1849,35 @@ function updateAirstrikeBtn() {
     btn.textContent = `💣 Luftschlag (${AIRSTRIKE_COST}g) ×${airstrikeCharges}`;
 }
 
+const REPAIR_COST  = 150;
+const REPAIR_LIVES = 3;
+
+function useRepair() {
+    if (repairCharges <= 0 || gold < REPAIR_COST || !gameRunning) return;
+    gold -= REPAIR_COST;
+    repairCharges--;
+    const maxLives = selectedDifficulty === 'easy' ? 30 : selectedDifficulty === 'nightmare' ? 5 : selectedDifficulty === 'hard' ? 10 : 20;
+    const gained = Math.min(REPAIR_LIVES, maxLives + 5 - lives);
+    lives = Math.min(lives + REPAIR_LIVES, maxLives + 5);
+    if (soundEnabled) {
+        _tone({ freq: 440, type: 'sine', dur: 0.12, vol: 0.35, decay: 0.2, sweep: 660 });
+        setTimeout(() => _tone({ freq: 660, type: 'sine', dur: 0.10, vol: 0.30, decay: 0.15 }), 130);
+    }
+    spawnFloatText(canvas.width / 2, canvas.height / 2 - 30, `💚 +${gained}❤️ Notfall-Reparatur!`, '#4CAF50');
+    unlockAchievement('repair_used');
+    updateUI();
+    updateRepairBtn();
+}
+
+function updateRepairBtn() {
+    const btn = document.getElementById('repairBtn');
+    if (!btn) return;
+    btn.disabled = repairCharges <= 0 || gold < REPAIR_COST || !gameRunning;
+    btn.textContent = repairCharges > 0
+        ? `💚 Reparatur (${REPAIR_COST}g) ×${repairCharges}`
+        : `💚 Reparatur — verbraucht`;
+}
+
 // ================================================================
 // WAVE EVENTS
 // ================================================================
@@ -2847,6 +2877,7 @@ function updateUI() {
     if (diffEl) diffEl.textContent = diffIcons[selectedDifficulty] || '⚔️';
 
     updateAirstrikeBtn();
+    updateRepairBtn();
 
     // No-leak streak indicator
     const noLeakEl = document.getElementById('noLeakStat');
@@ -3016,6 +3047,7 @@ function resetGame() {
     armorBreakActive = false; armorBreakEnd = 0;
     turboFireActive = false; turboFireEnd = 0;
     airstrikeMode = false; airstrikeCharges = 3; airstrikeUsedThisGame = 0;
+    repairCharges = 1;
     canvas.style.cursor = 'default';
     updateAirstrikeBtn();
     enemySpeedMult = 1.0;
@@ -3461,9 +3493,13 @@ canvas.addEventListener('contextmenu', e => {
     e.preventDefault();
     if (selectedTower) {
         const refund = selectedTower.getSellValue();
+        const kills  = selectedTower.kills;
         gold += refund;
         sfxSell();
         spawnFloatText(selectedTower.x, selectedTower.y - 20, `+${refund}💰`, '#FFD700');
+        if (kills > 0) {
+            spawnFloatText(selectedTower.x, selectedTower.y - 38, `💀${kills}`, '#FF8A65');
+        }
         towers.splice(towers.indexOf(selectedTower), 1);
         selectedTower = null;
         updateUI();
@@ -3541,7 +3577,20 @@ canvas.addEventListener('click', e => {
 document.querySelectorAll('.tower-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const type = btn.dataset.type;
-        if (gold < parseInt(btn.dataset.cost)) return;
+        if (gold < parseInt(btn.dataset.cost)) {
+            // Flash the gold stat red to indicate insufficient funds
+            const goldEl = document.querySelector('.stat.gold');
+            if (goldEl) {
+                goldEl.style.transition = 'background 0.1s';
+                goldEl.style.background = '#ffe0e0';
+                goldEl.style.borderColor = '#F44336';
+                setTimeout(() => {
+                    goldEl.style.background = '';
+                    goldEl.style.borderColor = '';
+                }, 350);
+            }
+            return;
+        }
         selectedTowerType = (selectedTowerType === type) ? null : type;
         selectedTower = null;
         document.querySelectorAll('.tower-btn').forEach(b => b.classList.remove('selected'));
@@ -3604,8 +3653,14 @@ document.getElementById('speedBtn').addEventListener('click', () => {
 
 document.getElementById('sellTower').addEventListener('click', () => {
     if (!selectedTower) return;
-    gold += selectedTower.getSellValue();
+    const refund = selectedTower.getSellValue();
+    const kills  = selectedTower.kills;
+    gold += refund;
     sfxSell();
+    spawnFloatText(selectedTower.x, selectedTower.y - 20, `+${refund}💰`, '#FFD700');
+    if (kills > 0) {
+        spawnFloatText(selectedTower.x, selectedTower.y - 38, `💀${kills}`, '#FF8A65');
+    }
     towers.splice(towers.indexOf(selectedTower), 1);
     selectedTower = null;
     updateUI();
@@ -3687,6 +3742,10 @@ document.getElementById('airstrikeBtn').addEventListener('click', () => {
     activateAirstrike();
 });
 
+document.getElementById('repairBtn').addEventListener('click', () => {
+    useRepair();
+});
+
 document.getElementById('statsBtn').addEventListener('click', () => {
     const wasRunning = !gamePaused && gameRunning;
     if (wasRunning) { gamePaused = true; document.getElementById('pauseBtn').textContent = '▶ Weiter'; }
@@ -3706,6 +3765,22 @@ document.getElementById('statsBtn').addEventListener('click', () => {
         ? `${topTower.config.icon} ${topTower.config.name} L${topTower.level} (${topTower.kills} kills)`
         : '—';
 
+    // Tower ranking (top 4 by kills)
+    const towerRanking = [...towers]
+        .filter(t => t.kills > 0)
+        .sort((a, b) => b.kills - a.kills)
+        .slice(0, 4)
+        .map(t => `${t.config.icon}${t.config.name.slice(0,4)} <b>${t.kills}💀</b>`)
+        .join(' · ');
+
+    // Active events status
+    const activeEvts = [];
+    if (Date.now() < damageBoostEnd) activeEvts.push(`⚡ Surge ${Math.ceil((damageBoostEnd-Date.now())/1000)}s`);
+    if (Date.now() < killGoldEnd)    activeEvts.push(`🌟 Goldschauer ${Math.ceil((killGoldEnd-Date.now())/1000)}s`);
+    if (radarActive && Date.now() < radarEnd) activeEvts.push(`📡 Radar ${Math.ceil((radarEnd-Date.now())/1000)}s`);
+    if (armorBreakActive && Date.now() < armorBreakEnd) activeEvts.push(`🔨 Rüstungsbruch ${Math.ceil((armorBreakEnd-Date.now())/1000)}s`);
+    if (turboFireActive && Date.now() < turboFireEnd) activeEvts.push(`🔥 Turbofeuer ${Math.ceil((turboFireEnd-Date.now())/1000)}s`);
+
     document.getElementById('statsContent').innerHTML =
         `<div class="stats-row"><span>⏱ Spielzeit</span><span>${timeStr}</span></div>` +
         `<div class="stats-row"><span>🌊 Wellen abgeschlossen</span><span>${wave}</span></div>` +
@@ -3716,6 +3791,8 @@ document.getElementById('statsBtn').addEventListener('click', () => {
         `<div class="stats-row"><span>🛡 No-Leak Streak</span><span>${_noLeakCount}</span></div>` +
         `<div class="stats-row"><span>🗼 Türme platziert</span><span>${towers.length}</span></div>` +
         `<div class="stats-row"><span>⭐ Top-Turm</span><span>${topTowerStr}</span></div>` +
+        (towerRanking ? `<div class="stats-row"><span>🏅 Ranking</span><span style="font-size:0.82em">${towerRanking}</span></div>` : '') +
+        (activeEvts.length ? `<div class="stats-row"><span>🎲 Aktive Events</span><span style="font-size:0.82em">${activeEvts.join(' · ')}</span></div>` : '') +
         (killDistrib ? `<div class="stats-row stats-kills"><span>Kills:</span><span>${killDistrib}</span></div>` : '');
 
     const modal = document.getElementById('statsModal');
@@ -4010,6 +4087,7 @@ const ACHIEVEMENTS = [
     { id: 'airstrike_first', icon: '💣', name: 'Luftüberlegenheit',   desc: 'Ersten Luftschlag eingesetzt' },
     { id: 'turbofire_win',   icon: '🔥', name: 'Turbo-Kommandant',   desc: 'Welle mit Turbofeuer abgeschlossen' },
     { id: 'fluss_played',    icon: '🌊', name: 'Flussläufer',         desc: 'Fluss-Karte gespielt' },
+    { id: 'repair_used',     icon: '💚', name: 'Rettungsanker',       desc: 'Notfall-Reparatur eingesetzt' },
 ];
 
 let _achUnlocked = new Set(JSON.parse(localStorage.getItem(ACH_KEY) || '[]'));

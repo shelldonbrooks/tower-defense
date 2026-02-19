@@ -368,6 +368,24 @@ body {
 .btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-danger.selected { box-shadow: 0 0 0 3px #FF5252; }
 
+.btn-repair {
+    background: linear-gradient(135deg, #2e7d32, #1b5e20);
+    color: white;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.78em;
+    font-weight: 600;
+    transition: all 0.18s;
+}
+.btn-repair:hover:not(:disabled) {
+    background: linear-gradient(135deg, #388e3c, #2e7d32);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(46,125,50,0.35);
+}
+.btn-repair:disabled { opacity: 0.4; cursor: not-allowed; }
+
 .btn-row {
     display: flex;
     gap: 7px;

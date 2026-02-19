@@ -22,9 +22,20 @@ if (typeof CanvasRenderingContext2D !== 'undefined' &&
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-const CELL_SIZE = 40;
-const GRID_WIDTH = 20;
+const GRID_WIDTH  = 20;
 const GRID_HEIGHT = 15;
+
+// Responsive cell size — scales the canvas to fill available desktop space
+let CELL_SIZE = 40; // default; overridden immediately below
+(function initCanvasSize() {
+    const vw = window.innerWidth;
+    if      (vw >= 1600) CELL_SIZE = 54;
+    else if (vw >= 1440) CELL_SIZE = 50;
+    else if (vw >= 1200) CELL_SIZE = 44;
+    else                  CELL_SIZE = 40;
+    canvas.width  = CELL_SIZE * GRID_WIDTH;
+    canvas.height = CELL_SIZE * GRID_HEIGHT;
+}());
 
 // ================================================================
 // GAME STATE
@@ -82,6 +93,8 @@ let airstrikeCharges = 3;   // charges per game
 let airstrikeUsedThisGame = 0;
 let mouseCanvasX = -999;    // for airstrike preview circle
 let mouseCanvasY = -999;
+let turboFireActive = false; // wave event: +50% fire rate
+let turboFireEnd    = 0;
 
 // ================================================================
 // AUDIO SYSTEM (Web Audio API — no external files)
@@ -149,6 +162,23 @@ function sfxKill(isBoss) {
         _soundThrottle['kill'] = Date.now();
         _tone({ freq: 220, type: 'sawtooth', dur: 0.06, vol: 0.22, decay: 0.10, sweep: 90 });
     }
+}
+
+function sfxEliteKill() {
+    if (!soundEnabled) return;
+    // Dramatic 3-note triumph for elite mini-boss
+    _tone({ freq: 110, type: 'sawtooth', dur: 0.22, vol: 0.55, decay: 0.45, sweep: 35 });
+    setTimeout(() => _tone({ freq: 700, type: 'sine', dur: 0.16, vol: 0.48, decay: 0.28, sweep: 1100 }), 230);
+    setTimeout(() => _tone({ freq: 940, type: 'sine', dur: 0.20, vol: 0.42, decay: 0.32 }), 420);
+}
+
+function sfxTitanKill() {
+    if (!soundEnabled) return;
+    // Massive earth-shaking fanfare for the Titan
+    _tone({ freq: 55,  type: 'sawtooth', dur: 0.42, vol: 0.65, decay: 0.90, sweep: 18 });
+    setTimeout(() => _tone({ freq: 42,  type: 'sawtooth', dur: 0.32, vol: 0.55, decay: 0.70, sweep: 22 }), 400);
+    setTimeout(() => _tone({ freq: 880, type: 'sine',     dur: 0.24, vol: 0.52, decay: 0.44, sweep: 1400 }), 780);
+    setTimeout(() => _tone({ freq: 1200,type: 'sine',     dur: 0.18, vol: 0.42, decay: 0.32 }), 1020);
 }
 
 function sfxLifeLost() {
@@ -289,6 +319,21 @@ const ALL_MAPS = [
             {x: 12, y: 8},
             {x: 12, y: 3},
             {x: 20, y: 3}
+        ]
+    },
+    {
+        name: 'Fluss',
+        icon: '🌊',
+        desc: 'Mäandernder Flusslauf — viele Wendungen!',
+        waypoints: [
+            {x: 0,  y: 11},
+            {x: 6,  y: 11},
+            {x: 6,  y: 3},
+            {x: 14, y: 3},
+            {x: 14, y: 11},
+            {x: 18, y: 11},
+            {x: 18, y: 6},
+            {x: 20, y: 6}
         ]
     }
 ];
@@ -955,7 +1000,8 @@ class Tower {
 
     update(now) {
         const stats = this.getStats();
-        const effectiveRate = stats.fireRate / gameSpeed;
+        const turboMult = turboFireActive && Date.now() < turboFireEnd ? 1.5 : 1.0;
+        const effectiveRate = (stats.fireRate / gameSpeed) / turboMult;
 
         if (this.config.isLaser) {
             this._handleLaser(now, stats);
@@ -1071,7 +1117,8 @@ class Tower {
         if (Math.sqrt(dx * dx + dy * dy) > stats.range) {
             this.target = null; this.lockTime = 0; return;
         }
-        const effectiveRate = stats.fireRate / gameSpeed;
+        const turboMultL = turboFireActive && Date.now() < turboFireEnd ? 1.5 : 1.0;
+        const effectiveRate = (stats.fireRate / gameSpeed) / turboMultL;
         if (now - this.lastFired < effectiveRate) return;
 
         const dtMs = Math.min(now - this.lastFired, 200);
@@ -1677,6 +1724,7 @@ function killEnemy(idx) {
     if (e.isElite) {
         triggerShake(10);
         screenFlash = 0.35;
+        sfxEliteKill();
         // Golden elite kill burst
         for (let i = 0; i < 20; i++) {
             const a = (Math.PI * 2 * i) / 20 + Math.random() * 0.3;
@@ -1689,6 +1737,7 @@ function killEnemy(idx) {
     if (e.isTitan) {
         triggerShake(20);
         screenFlash = 0.8;
+        sfxTitanKill();
         // Massive titan kill explosion
         for (let i = 0; i < 5; i++) {
             setTimeout(() => spawnExplosion(
@@ -1699,7 +1748,6 @@ function killEnemy(idx) {
             ), i * 80);
         }
         spawnFloatText(e.x, e.y - 35, '🦾 TITAN GEFALLEN!', '#3949AB');
-        sfxKill(true); // reuse boss kill sound
     }
     if (e === focusedEnemy) focusedEnemy = null;
     enemies.splice(idx, 1);
@@ -1922,6 +1970,16 @@ const WAVE_EVENTS = [
                     _waveRosterTotal++;  // update progress bar total only
                 }, i * 400);
             }
+        }
+    },
+    {
+        id: 'turbofire',
+        name: '🔥 Turbofeuer!',
+        desc: '+50% Feuerrate für 20s!',
+        apply: () => {
+            turboFireActive = true;
+            turboFireEnd    = Date.now() + 20000;
+            spawnFloatText(canvas.width / 2, canvas.height / 2 - 20, '🔥 TURBOFEUER! +50% Feuerrate!', '#FF6B35');
         }
     }
 ];
@@ -2447,6 +2505,7 @@ function checkWaveComplete() {
     }
 
     sfxWaveComplete();
+    if (turboFireActive) unlockAchievement('turbofire_win');
     const shortParts = bonusParts.slice(0, 2).join(' · ');
     showBanner(`🌊 Welle ${wave} abgeschlossen! ${shortParts}`);
     checkAchievements();
@@ -2937,6 +2996,7 @@ function resetGame() {
     killGoldMult = 1.0; killGoldEnd = 0; prevGoldActive = false;
     radarActive = false; radarEnd = 0;
     armorBreakActive = false; armorBreakEnd = 0;
+    turboFireActive = false; turboFireEnd = 0;
     airstrikeMode = false; airstrikeCharges = 3; airstrikeUsedThisGame = 0;
     canvas.style.cursor = 'default';
     updateAirstrikeBtn();
@@ -3195,6 +3255,27 @@ function gameLoop(timestamp) {
         } else if (armorBreakActive) {
             armorBreakActive = false;
             showBanner('🔨 Rüstungsbruch abgelaufen!');
+        }
+
+        // Turbofire active indicator
+        if (turboFireActive && Date.now() < turboFireEnd) {
+            const remTF = Math.ceil((turboFireEnd - Date.now()) / 1000);
+            const tfPulse = 0.80 + Math.abs(Math.sin(Date.now() / 180)) * 0.20;
+            ctx.globalAlpha = tfPulse;
+            ctx.fillStyle = 'rgba(200,80,0,0.60)';
+            ctx.beginPath();
+            ctx.roundRect(canvas.width / 2 - 95, hudY, 190, 24, 8);
+            ctx.fill();
+            ctx.fillStyle = '#FF6B35';
+            ctx.font = 'bold 13px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`🔥 TURBOFEUER: ${remTF}s`, canvas.width / 2, hudY + 12);
+            ctx.globalAlpha = 1;
+            hudY -= 28;
+        } else if (turboFireActive) {
+            turboFireActive = false;
+            showBanner('🔥 Turbofeuer abgelaufen!');
         }
 
         // Screen flash (boss kill / special events)
@@ -3837,13 +3918,15 @@ const ACHIEVEMENTS = [
     { id: 'veteran_tower',  icon: '✦',  name: 'Veteran',             desc: 'Turm erreicht 50 Kills' },
     { id: 'nightmare_win',  icon: '☠️', name: 'Albtraum-Bezwinger', desc: 'Welle 15 auf Nightmare überleben' },
     { id: 'perfect_game',   icon: '💎', name: 'Unberührt!',         desc: 'Welle 25 erreichen ohne einen Treffer' },
-    { id: 'all_maps',       icon: '🌍', name: 'Kartograph',         desc: 'Alle 5 Karten gespielt' },
+    { id: 'all_maps',       icon: '🌍', name: 'Kartograph',         desc: 'Alle 6 Karten gespielt' },
     { id: 'gold_10000',     icon: '🏦', name: 'Schatzkammer',       desc: '10.000 Gold in einer Partie verdient' },
     { id: 'overdrive',      icon: '🔥', name: 'Überhitzt!',         desc: 'Laser in Overdrive-Modus gebracht' },
     { id: 'titan_kill',     icon: '🦾', name: 'Titanenkiller',       desc: 'Einen Titan besiegt (W30+)' },
     { id: 'wave_35',        icon: '🌙', name: 'Unsterblich II',      desc: 'Welle 35 erreichen' },
     { id: 'wave_50',        icon: '🌠', name: 'Gott-Modus',          desc: 'Welle 50 erreichen!' },
     { id: 'airstrike_first', icon: '💣', name: 'Luftüberlegenheit',   desc: 'Ersten Luftschlag eingesetzt' },
+    { id: 'turbofire_win',   icon: '🔥', name: 'Turbo-Kommandant',   desc: 'Welle mit Turbofeuer abgeschlossen' },
+    { id: 'fluss_played',    icon: '🌊', name: 'Flussläufer',         desc: 'Fluss-Karte gespielt' },
 ];
 
 let _achUnlocked = new Set(JSON.parse(localStorage.getItem(ACH_KEY) || '[]'));
@@ -3859,7 +3942,8 @@ function markMapPlayed() {
     const played = new Set(JSON.parse(localStorage.getItem(MAP_PLAYED_KEY) || '[]'));
     played.add(selectedMapIndex);
     localStorage.setItem(MAP_PLAYED_KEY, JSON.stringify([...played]));
-    if (played.size >= 5) unlockAchievement('all_maps');
+    if (played.size >= 6) unlockAchievement('all_maps');
+    if (selectedMapIndex === 5) unlockAchievement('fluss_played');
 }
 
 function unlockAchievement(id) {

@@ -135,12 +135,15 @@ body {
    ================================================================ */
 .game-area {
     display: flex;
-    gap: 20px;
-    align-items: flex-start;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
 }
 
 .canvas-wrapper {
-    flex-shrink: 0;
+    width: 100%;
+    display: flex;
+    justify-content: center;
 }
 
 #gameCanvas {
@@ -151,6 +154,268 @@ body {
     cursor: crosshair;
     box-shadow: var(--shadow);
     max-width: 100%;
+}
+
+/* ================================================================
+   TOP CONTROL BAR
+   ================================================================ */
+.top-bar {
+    width: 100%;
+    background: rgba(10,16,30,0.95);
+    border-bottom: 1px solid rgba(56,189,248,0.15);
+    border-radius: var(--radius) var(--radius) 0 0;
+    padding: 6px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.top-bar-left,
+.top-bar-right {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+.top-bar-center {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    min-width: 0;
+}
+
+.tb-btn {
+    padding: 4px 10px;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 20px;
+    color: #e2e8f0;
+    font-size: 0.78em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.tb-btn:hover:not(:disabled) {
+    background: rgba(255,255,255,0.15);
+    border-color: rgba(56,189,248,0.5);
+    color: #fff;
+}
+
+.tb-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.tb-btn-primary {
+    background: rgba(102,126,234,0.35);
+    border-color: rgba(102,126,234,0.6);
+    color: #c7d2fe;
+}
+
+.tb-btn-primary:hover:not(:disabled) {
+    background: rgba(102,126,234,0.55);
+}
+
+.tb-btn-danger {
+    background: rgba(183,28,28,0.35);
+    border-color: rgba(239,68,68,0.5);
+    color: #fca5a5;
+}
+
+.tb-btn-danger:hover:not(:disabled) {
+    background: rgba(183,28,28,0.55);
+}
+
+.tb-btn-danger.selected {
+    box-shadow: 0 0 0 2px #FF5252;
+}
+
+.tb-btn-heal {
+    background: rgba(46,125,50,0.35);
+    border-color: rgba(74,222,128,0.5);
+    color: #86efac;
+}
+
+.tb-btn-heal:hover:not(:disabled) {
+    background: rgba(46,125,50,0.55);
+}
+
+.tb-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: #94a3b8;
+    font-size: 0.78em;
+    cursor: pointer;
+}
+
+.tb-toggle input[type="checkbox"] {
+    width: 13px;
+    height: 13px;
+    accent-color: #667eea;
+    cursor: pointer;
+}
+
+.wave-preview-chip {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(56,189,248,0.2);
+    border-radius: 20px;
+    padding: 3px 12px;
+    font-size: 0.76em;
+    color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 340px;
+}
+
+/* ================================================================
+   TOWER SHOP OVERLAY (fixed bottom)
+   ================================================================ */
+.tower-shop-overlay {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(8,13,24,0.97);
+    border-top: 1px solid rgba(56,189,248,0.15);
+    z-index: 100;
+    padding: 6px 12px 8px;
+}
+
+.shop-toggle-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.shop-toggle-btn {
+    padding: 4px 14px;
+    background: rgba(102,126,234,0.25);
+    border: 1px solid rgba(102,126,234,0.5);
+    border-radius: 20px;
+    color: #c7d2fe;
+    font-size: 0.8em;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.shop-toggle-btn:hover {
+    background: rgba(102,126,234,0.45);
+    color: #fff;
+}
+
+.tower-info-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex: 1;
+}
+
+.tower-info-inline .tower-info-name {
+    font-size: 0.85em;
+    font-weight: 700;
+    color: #c7d2fe;
+}
+
+.tower-info-inline .tower-info-stats {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.tower-info-inline .tower-info-stats span {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 5px;
+    padding: 2px 6px;
+    font-size: 0.72em;
+    color: #cbd5e1;
+}
+
+.tm-row {
+    display: flex;
+    gap: 4px;
+}
+
+.tm-btn {
+    padding: 3px 8px;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 12px;
+    color: #94a3b8;
+    font-size: 0.72em;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.tm-btn:hover {
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+}
+
+.tm-btn.active {
+    background: rgba(102,126,234,0.45);
+    border-color: rgba(102,126,234,0.7);
+    color: #c7d2fe;
+}
+
+.shop-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 0 0;
+}
+
+.shop-grid .tower-btn {
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.15);
+    color: #e2e8f0;
+    padding: 6px 10px;
+    min-width: 70px;
+}
+
+.shop-grid .tower-btn:hover:not(.disabled) {
+    border-color: rgba(102,126,234,0.7);
+    background: rgba(102,126,234,0.15);
+    transform: translateY(-2px);
+}
+
+.shop-grid .tower-btn.selected {
+    border-color: #667eea;
+    background: rgba(102,126,234,0.25);
+    box-shadow: 0 0 0 2px rgba(102,126,234,0.4);
+}
+
+.shop-grid .tb-name { color: #cbd5e1; }
+.shop-grid .tb-cost { color: #fbbf24; }
+
+.shop-grid .tower-btn-wide {
+    flex: 1 1 100%;
+    flex-direction: row;
+    justify-content: space-around;
+    background: rgba(255,23,68,0.08);
+    border-color: rgba(255,23,68,0.3);
+}
+
+.shop-grid .tower-btn-wide:hover:not(.disabled) {
+    border-color: rgba(255,23,68,0.6);
+    background: rgba(255,23,68,0.18);
+}
+
+/* Give canvas bottom padding so shop overlay doesn't cover it */
+.canvas-wrapper {
+    padding-bottom: 70px;
 }
 
 /* ================================================================
@@ -990,28 +1255,6 @@ body {
    RESPONSIVE
    ================================================================ */
 @media (max-width: 960px) {
-    .game-area {
-        flex-direction: column;
-        align-items: center;
-    }
-
-    .side-panel {
-        width: 100%;
-        max-width: 900px;
-        flex-direction: row;
-        flex-wrap: wrap;
-        gap: 10px;
-    }
-
-    .panel-section {
-        flex: 1;
-        min-width: 160px;
-    }
-
-    .tower-grid {
-        grid-template-columns: repeat(3, 1fr);
-    }
-
     #gameCanvas {
         width: 100%;
         height: auto;

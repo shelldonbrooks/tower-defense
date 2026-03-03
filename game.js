@@ -22,6 +22,22 @@ if (typeof CanvasRenderingContext2D !== 'undefined' &&
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
+// ================================================================
+// SPRITE SHEETS
+// ================================================================
+const SPRITES = {
+    forest: new Image(),
+    desert: new Image(),
+};
+SPRITES.forest.src = 'sprites/forest/001-top-down-2d-tower-defense-game-sprite-sh.png';
+SPRITES.desert.src = 'sprites/desert/001-top-down-2d-tower-defense-game-sprite-sh.png';
+
+function drawSprite(sheet, col, row, destX, destY, destW, destH) {
+    const CELL = 341;
+    if (!sheet.complete || !sheet.naturalWidth) return; // not loaded yet
+    ctx.drawImage(sheet, col * CELL, row * CELL, CELL, CELL, destX, destY, destW, destH);
+}
+
 const GRID_WIDTH  = 20;
 const GRID_HEIGHT = 15;
 
@@ -2105,19 +2121,35 @@ const themeDecorations = (() => {
     };
     const W = CELL_SIZE * GRID_WIDTH;
     const H = CELL_SIZE * GRID_HEIGHT;
-    // Forest trees
+    // Forest trees — with treeType for sprite selection
     const rt = rng(101);
-    const trees = Array.from({ length: 55 }, () => ({
-        x: rt() * W, y: rt() * H,
-        size: 16 + rt() * 22
-    }));
-    // Desert: cacti + rocks
+    const TREE_TYPES = ['large', 'medium', 'bush'];
+    const trees = Array.from({ length: 55 }, () => {
+        const roll = rt();
+        return {
+            x: rt() * W, y: rt() * H,
+            size: 16 + rt() * 22,
+            treeType: roll > 0.6 ? 'large' : roll > 0.3 ? 'medium' : 'bush'
+        };
+    });
+    // Desert: cacti + rocks — with sprite-mapped type strings
     const rd = rng(202);
-    const desert = Array.from({ length: 60 }, () => ({
-        x: rd() * W, y: rd() * H,
-        size: 14 + rd() * 18,
-        type: rd() > 0.6 ? 'cactus' : rd() > 0.3 ? 'rock' : 'dune'
-    }));
+    const DESERT_TYPES = ['cactus_large', 'cactus_tall', 'rock', 'cactus_pad', 'cactus_small', 'tumbleweed'];
+    const desert = Array.from({ length: 60 }, () => {
+        const roll = rd();
+        let type;
+        if (roll > 0.83)      type = 'cactus_large';
+        else if (roll > 0.66) type = 'cactus_tall';
+        else if (roll > 0.50) type = 'rock';
+        else if (roll > 0.33) type = 'cactus_pad';
+        else if (roll > 0.16) type = 'cactus_small';
+        else                  type = 'tumbleweed';
+        return {
+            x: rd() * W, y: rd() * H,
+            size: 14 + rd() * 18,
+            type
+        };
+    });
     // Mars: craters + boulders
     const rm = rng(303);
     const mars = Array.from({ length: 55 }, () => ({
@@ -2290,12 +2322,23 @@ function drawBackground() {
             ctx.fill();
             ctx.restore();
         }
-        // Forest trees scattered around (skip path cells)
+        // Forest trees scattered around (skip path cells) — use sprite sheet
         for (const t of themeDecorations.trees) {
             const gc = Math.floor(t.x / CELL_SIZE);
             const gr = Math.floor(t.y / CELL_SIZE);
             if (pathCells.has(`${gc},${gr}`)) continue;
-            drawTree(t.x, t.y, t.size);
+            const size = t.size * 1.5 || CELL_SIZE * 1.2;
+            // Row 1: large tree [0,1], medium tree mapped to [1,1] (straight path = re-use col1)
+            // Actually: [0,1] Large tree, [2,1] Round bush, [0,2] Medium tree, [1,2] Small bush, [2,2] Dark rock
+            let sprCol, sprRow;
+            if (t.treeType === 'large')       { sprCol = 0; sprRow = 1; }
+            else if (t.treeType === 'medium') { sprCol = 0; sprRow = 2; }
+            else                              { sprCol = 2; sprRow = 1; } // bush
+            if (SPRITES.forest.complete && SPRITES.forest.naturalWidth) {
+                drawSprite(SPRITES.forest, sprCol, sprRow, t.x - size/2, t.y - size/2, size, size);
+            } else {
+                drawTree(t.x, t.y, t.size); // fallback while loading
+            }
         }
 
     } else if (currentTheme === 'desert') {
@@ -2326,14 +2369,28 @@ function drawBackground() {
             }
             ctx.stroke();
         }
-        // Desert decorations
+        // Desert decorations — use sprite sheet
+        const desertSpriteMap = {
+            cactus_large: [0, 1],
+            cactus_tall:  [1, 1],
+            rock:         [2, 1],
+            cactus_pad:   [0, 2],
+            cactus_small: [1, 2],
+            tumbleweed:   [2, 2]
+        };
         for (const d of themeDecorations.desert) {
             const gc = Math.floor(d.x / CELL_SIZE);
             const gr = Math.floor(d.y / CELL_SIZE);
             if (pathCells.has(`${gc},${gr}`)) continue;
-            if (d.type === 'cactus') drawCactus(d.x, d.y, d.size);
-            else if (d.type === 'rock') drawDesertRock(d.x, d.y, d.size);
-            // 'dune' is just background texture, no extra drawing
+            const size = d.size * 1.4 || CELL_SIZE * 1.1;
+            const [col, row] = desertSpriteMap[d.type] || [2, 1];
+            if (SPRITES.desert.complete && SPRITES.desert.naturalWidth) {
+                drawSprite(SPRITES.desert, col, row, d.x - size/2, d.y - size/2, size, size);
+            } else {
+                // fallback to procedural drawing while sprite loads
+                if (d.type === 'rock')        drawDesertRock(d.x, d.y, d.size);
+                else if (d.type !== 'tumbleweed') drawCactus(d.x, d.y, d.size);
+            }
         }
 
     } else if (currentTheme === 'mars') {
@@ -4681,6 +4738,21 @@ document.querySelectorAll('.theme-btn').forEach(btn => {
         btn.classList.add('map-active');
     });
 });
+
+// ================================================================
+// SHOP TOGGLE
+// ================================================================
+(function initShopToggle() {
+    const shopToggle = document.getElementById('shopToggle');
+    const shopGrid   = document.getElementById('shopGrid');
+    if (shopToggle && shopGrid) {
+        shopToggle.addEventListener('click', () => {
+            const isOpen = shopGrid.style.display !== 'none';
+            shopGrid.style.display = isOpen ? 'none' : 'flex';
+            shopToggle.classList.toggle('shop-open', !isOpen);
+        });
+    }
+}());
 
 // ================================================================
 // INIT

@@ -96,6 +96,7 @@ let mouseCanvasY = -999;
 let turboFireActive = false; // wave event: +50% fire rate
 let turboFireEnd    = 0;
 let repairCharges   = 1;    // emergency repair: +3 lives, costs 150g, 1 use per game
+let currentTheme    = 'forest'; // visual theme: 'forest' | 'desert' | 'mars'
 
 // ================================================================
 // AUDIO SYSTEM (Web Audio API — no external files)
@@ -338,6 +339,33 @@ const ALL_MAPS = [
         ]
     }
 ];
+
+// ================================================================
+// THEMES (visual) — purely cosmetic, no gameplay effect
+// ================================================================
+const THEMES = {
+    forest: {
+        name: 'Forest', icon: '🌲',
+        bgColor: '#dde8c8',
+        pathColor: '#A1887F',
+        pathEdge: '#8D6E63',
+        patchColors: ['#c8d8a8', '#b8cc90']
+    },
+    desert: {
+        name: 'Desert', icon: '🏜️',
+        bgColor: '#e8d5a0',
+        pathColor: '#d4a84b',
+        pathEdge: '#c49a3a',
+        patchColors: ['#d4c080', '#e0ca90']
+    },
+    mars: {
+        name: 'Mars', icon: '🔴',
+        bgColor: '#c1440e',
+        pathColor: '#6b2c0a',
+        pathEdge: '#5a2008',
+        patchColors: ['#a83a0a', '#8b2500']
+    }
+};
 
 let selectedMapIndex = 0;
 let PATH_WAYPOINTS = ALL_MAPS[0].waypoints;
@@ -2069,24 +2097,272 @@ const grassPatches = (() => {
     }));
 })();
 
-function drawBackground() {
-    // Base grass fill
-    ctx.fillStyle = '#dde8c8';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+// Pre-generate theme decoration positions
+const themeDecorations = (() => {
+    const rng = (seed) => {
+        let s = seed;
+        return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+    };
+    const W = CELL_SIZE * GRID_WIDTH;
+    const H = CELL_SIZE * GRID_HEIGHT;
+    // Forest trees
+    const rt = rng(101);
+    const trees = Array.from({ length: 55 }, () => ({
+        x: rt() * W, y: rt() * H,
+        size: 16 + rt() * 22
+    }));
+    // Desert: cacti + rocks
+    const rd = rng(202);
+    const desert = Array.from({ length: 60 }, () => ({
+        x: rd() * W, y: rd() * H,
+        size: 14 + rd() * 18,
+        type: rd() > 0.6 ? 'cactus' : rd() > 0.3 ? 'rock' : 'dune'
+    }));
+    // Mars: craters + boulders
+    const rm = rng(303);
+    const mars = Array.from({ length: 55 }, () => ({
+        x: rm() * W, y: rm() * H,
+        r: 8 + rm() * 22,
+        type: rm() > 0.55 ? 'crater' : 'boulder'
+    }));
+    return { trees, desert, mars };
+})();
 
-    // Grass patches
-    for (const p of grassPatches) {
-        if (pathCells.has(`${Math.floor(p.x / CELL_SIZE)},${Math.floor(p.y / CELL_SIZE)}`)) continue;
-        ctx.save();
-        ctx.globalAlpha = p.alpha;
-        ctx.fillStyle = p.shade ? '#c8d8a8' : '#b8cc90';
-        ctx.translate(p.x, p.y);
-        ctx.rotate(p.angle);
-        ctx.beginPath();
-        ctx.ellipse(0, 0, p.rx, p.ry, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
+// ---- Theme decoration drawing helpers ----
+
+function drawTree(x, y, size) {
+    ctx.save();
+    // Ground shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.10)';
+    ctx.beginPath();
+    ctx.ellipse(x + size * 0.06, y + size * 0.34, size * 0.28, size * 0.10, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Trunk
+    ctx.fillStyle = '#5c3d1e';
+    ctx.fillRect(x - size * 0.12, y - size * 0.05, size * 0.24, size * 0.42);
+    // Canopy (dark green)
+    ctx.fillStyle = '#2d5a1b';
+    ctx.beginPath();
+    ctx.arc(x, y - size * 0.12, size * 0.40, 0, Math.PI * 2);
+    ctx.fill();
+    // Canopy highlight
+    ctx.fillStyle = '#3d7a28';
+    ctx.beginPath();
+    ctx.arc(x - size * 0.10, y - size * 0.22, size * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+}
+
+function drawCactus(x, y, size) {
+    ctx.save();
+    ctx.fillStyle = '#4a7c3f';
+    const tw = size * 0.22;
+    const th = size * 0.72;
+    // Main trunk
+    ctx.beginPath();
+    ctx.roundRect(x - tw / 2, y - th, tw, th, tw / 2);
+    ctx.fill();
+    // Left arm
+    const aw = size * 0.18;
+    ctx.beginPath();
+    ctx.roundRect(x - tw / 2 - aw, y - th * 0.52, aw, size * 0.32, aw / 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.roundRect(x - tw / 2 - aw, y - th * 0.52 - size * 0.20, size * 0.26, aw, aw / 2);
+    ctx.fill();
+    // Right arm
+    ctx.beginPath();
+    ctx.roundRect(x + tw / 2, y - th * 0.63, aw, size * 0.28, aw / 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.roundRect(x + tw / 2, y - th * 0.63 - size * 0.16, size * 0.24, aw, aw / 2);
+    ctx.fill();
+    // Highlight stripe
+    ctx.fillStyle = '#6aaa5a';
+    ctx.beginPath();
+    ctx.roundRect(x - tw * 0.18, y - th, tw * 0.28, th, tw * 0.14);
+    ctx.fill();
+    ctx.restore();
+}
+
+function drawDesertRock(x, y, size) {
+    ctx.save();
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath();
+    ctx.ellipse(x + size * 0.12, y + size * 0.10, size * 0.44, size * 0.16, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Rock body
+    ctx.fillStyle = '#b8975a';
+    ctx.beginPath();
+    ctx.moveTo(x - size * 0.42, y);
+    ctx.lineTo(x - size * 0.28, y - size * 0.28);
+    ctx.lineTo(x + size * 0.10, y - size * 0.34);
+    ctx.lineTo(x + size * 0.44, y - size * 0.14);
+    ctx.lineTo(x + size * 0.38, y + size * 0.08);
+    ctx.lineTo(x - size * 0.35, y + size * 0.10);
+    ctx.closePath();
+    ctx.fill();
+    // Highlight
+    ctx.fillStyle = '#d4b070';
+    ctx.beginPath();
+    ctx.moveTo(x - size * 0.20, y - size * 0.20);
+    ctx.lineTo(x + size * 0.08, y - size * 0.28);
+    ctx.lineTo(x + size * 0.28, y - size * 0.10);
+    ctx.lineTo(x - size * 0.10, y - size * 0.06);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+}
+
+function drawCrater(x, y, r) {
+    ctx.save();
+    // Outer shadow ring
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.beginPath();
+    ctx.arc(x, y, r + 4, 0, Math.PI * 2);
+    ctx.fill();
+    // Rim (slightly lighter orange-red)
+    ctx.fillStyle = '#d45a20';
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    // Inner bowl (dark)
+    ctx.fillStyle = '#6b1800';
+    ctx.beginPath();
+    ctx.arc(x + r * 0.08, y + r * 0.08, r * 0.68, 0, Math.PI * 2);
+    ctx.fill();
+    // Center highlight glint
+    ctx.fillStyle = 'rgba(210,90,30,0.35)';
+    ctx.beginPath();
+    ctx.arc(x - r * 0.16, y - r * 0.16, r * 0.28, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+}
+
+function drawMarsBoulder(x, y, r) {
+    ctx.save();
+    // Ground shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.20)';
+    ctx.beginPath();
+    ctx.ellipse(x + r * 0.18, y + r * 0.28, r * 0.80, r * 0.28, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Boulder body (angular)
+    ctx.fillStyle = '#8b3a10';
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.60, y);
+    ctx.lineTo(x - r * 0.30, y - r * 0.72);
+    ctx.lineTo(x + r * 0.22, y - r * 0.76);
+    ctx.lineTo(x + r * 0.72, y - r * 0.30);
+    ctx.lineTo(x + r * 0.55, y + r * 0.22);
+    ctx.lineTo(x - r * 0.38, y + r * 0.26);
+    ctx.closePath();
+    ctx.fill();
+    // Top-left highlight face
+    ctx.fillStyle = '#b05020';
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.26, y - r * 0.62);
+    ctx.lineTo(x + r * 0.16, y - r * 0.68);
+    ctx.lineTo(x + r * 0.36, y - r * 0.28);
+    ctx.lineTo(x - r * 0.10, y - r * 0.22);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+}
+
+function drawBackground() {
+    const theme = THEMES[currentTheme];
+
+    if (currentTheme === 'forest') {
+        // Base grass fill
+        ctx.fillStyle = theme.bgColor;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Grass patches (existing ellipses)
+        for (const p of grassPatches) {
+            if (pathCells.has(`${Math.floor(p.x / CELL_SIZE)},${Math.floor(p.y / CELL_SIZE)}`)) continue;
+            ctx.save();
+            ctx.globalAlpha = p.alpha;
+            ctx.fillStyle = p.shade ? theme.patchColors[0] : theme.patchColors[1];
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.angle);
+            ctx.beginPath();
+            ctx.ellipse(0, 0, p.rx, p.ry, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+        // Forest trees scattered around (skip path cells)
+        for (const t of themeDecorations.trees) {
+            const gc = Math.floor(t.x / CELL_SIZE);
+            const gr = Math.floor(t.y / CELL_SIZE);
+            if (pathCells.has(`${gc},${gr}`)) continue;
+            drawTree(t.x, t.y, t.size);
+        }
+
+    } else if (currentTheme === 'desert') {
+        // Sandy base
+        ctx.fillStyle = theme.bgColor;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Subtle sand patches
+        for (const p of grassPatches) {
+            if (pathCells.has(`${Math.floor(p.x / CELL_SIZE)},${Math.floor(p.y / CELL_SIZE)}`)) continue;
+            ctx.save();
+            ctx.globalAlpha = p.alpha * 0.9;
+            ctx.fillStyle = p.shade ? theme.patchColors[0] : theme.patchColors[1];
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.angle);
+            ctx.beginPath();
+            ctx.ellipse(0, 0, p.rx * 1.4, p.ry, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+        // Dune ripple lines
+        ctx.strokeStyle = 'rgba(180,140,60,0.20)';
+        ctx.lineWidth = 1.5;
+        for (let dy = 28; dy < canvas.height; dy += 38) {
+            ctx.beginPath();
+            for (let dx = 0; dx < canvas.width; dx += 80) {
+                ctx.moveTo(dx, dy);
+                ctx.bezierCurveTo(dx + 20, dy - 9, dx + 60, dy + 9, dx + 80, dy);
+            }
+            ctx.stroke();
+        }
+        // Desert decorations
+        for (const d of themeDecorations.desert) {
+            const gc = Math.floor(d.x / CELL_SIZE);
+            const gr = Math.floor(d.y / CELL_SIZE);
+            if (pathCells.has(`${gc},${gr}`)) continue;
+            if (d.type === 'cactus') drawCactus(d.x, d.y, d.size);
+            else if (d.type === 'rock') drawDesertRock(d.x, d.y, d.size);
+            // 'dune' is just background texture, no extra drawing
+        }
+
+    } else if (currentTheme === 'mars') {
+        // Rust-red base
+        ctx.fillStyle = theme.bgColor;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Surface texture patches (darker rusty blotches)
+        for (const p of grassPatches) {
+            if (pathCells.has(`${Math.floor(p.x / CELL_SIZE)},${Math.floor(p.y / CELL_SIZE)}`)) continue;
+            ctx.save();
+            ctx.globalAlpha = p.alpha * 0.80;
+            ctx.fillStyle = p.shade ? theme.patchColors[0] : theme.patchColors[1];
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.angle);
+            ctx.beginPath();
+            ctx.ellipse(0, 0, p.rx, p.ry, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+        // Mars decorations (craters + boulders)
+        for (const m of themeDecorations.mars) {
+            const gc = Math.floor(m.x / CELL_SIZE);
+            const gr = Math.floor(m.y / CELL_SIZE);
+            if (pathCells.has(`${gc},${gr}`)) continue;
+            if (m.type === 'crater') drawCrater(m.x, m.y, m.r);
+            else drawMarsBoulder(m.x, m.y, m.r);
+        }
     }
+
     ctx.globalAlpha = 1;
 }
 
@@ -2102,8 +2378,10 @@ function drawGrid() {
 }
 
 function drawPath() {
-    // Path fill
-    ctx.strokeStyle = '#A1887F';
+    const theme = THEMES[currentTheme];
+
+    // ---- Path base fill ----
+    ctx.strokeStyle = theme.pathColor;
     ctx.lineWidth = CELL_SIZE * 0.75;
     ctx.lineCap  = 'round';
     ctx.lineJoin = 'round';
@@ -2116,12 +2394,43 @@ function drawPath() {
     }
     ctx.stroke();
 
-    // Path texture overlay
-    ctx.strokeStyle = '#8D6E63';
-    ctx.lineWidth = CELL_SIZE * 0.75 - 4;
-    ctx.setLineDash([8, 12]);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    // ---- Theme-specific path texture overlay ----
+    if (currentTheme === 'forest') {
+        // Earthy dirt texture with dashed edge
+        ctx.strokeStyle = theme.pathEdge;
+        ctx.lineWidth = CELL_SIZE * 0.75 - 4;
+        ctx.setLineDash([8, 12]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    } else if (currentTheme === 'desert') {
+        // Wind ripple marks — two staggered dashed lines
+        ctx.strokeStyle = 'rgba(210,165,55,0.55)';
+        ctx.lineWidth = CELL_SIZE * 0.75 - 6;
+        ctx.setLineDash([5, 18]);
+        ctx.lineDashOffset = 6;
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(210,165,55,0.30)';
+        ctx.lineWidth = CELL_SIZE * 0.75 - 16;
+        ctx.setLineDash([6, 14]);
+        ctx.lineDashOffset = 16;
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.lineDashOffset = 0;
+    } else if (currentTheme === 'mars') {
+        // Crack texture — tight dark dashes
+        ctx.strokeStyle = '#3d1200';
+        ctx.lineWidth = CELL_SIZE * 0.75 - 4;
+        ctx.setLineDash([3, 9]);
+        ctx.stroke();
+        // Secondary finer cracks
+        ctx.strokeStyle = 'rgba(80,15,0,0.55)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 22]);
+        ctx.lineDashOffset = 12;
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.lineDashOffset = 0;
+    }
 
     // Entry marker
     ctx.font = '16px Arial';
@@ -4332,6 +4641,10 @@ function showDifficultyScreen() {
     document.querySelectorAll('.map-btn').forEach(btn => {
         btn.classList.toggle('map-active', parseInt(btn.dataset.map) === selectedMapIndex);
     });
+    // Sync theme button active state
+    document.querySelectorAll('.theme-btn').forEach(btn => {
+        btn.classList.toggle('map-active', btn.dataset.theme === currentTheme);
+    });
     document.getElementById('difficultyOverlay').style.display = 'flex';
 }
 
@@ -4357,6 +4670,14 @@ document.querySelectorAll('.map-btn').forEach(btn => {
         const idx = parseInt(btn.dataset.map);
         selectMap(idx);
         document.querySelectorAll('.map-btn').forEach(b => b.classList.remove('map-active'));
+        btn.classList.add('map-active');
+    });
+});
+
+document.querySelectorAll('.theme-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        currentTheme = btn.dataset.theme;
+        document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('map-active'));
         btn.classList.add('map-active');
     });
 });
